@@ -3,7 +3,8 @@ from pydantic import BaseModel, Field
 
 
 class ChoicePredictionRequest(BaseModel):
-    input_ids: List[int] = Field(..., description="Token sequence IDs")
+    text: Optional[str] = Field(None, description="Raw input text prompt (automatically tokenized if input_ids is omitted)")
+    input_ids: Optional[List[int]] = Field(None, description="Pre-tokenized token sequence IDs")
     candidate_embeddings: List[List[float]] = Field(..., description="C candidate embeddings of dimension d_model")
     valid_mask: Optional[List[bool]] = Field(None, description="Optional boolean mask over valid candidates")
 
@@ -19,7 +20,8 @@ class ChoicePredictionResponse(BaseModel):
 
 
 class OrdinalPredictionRequest(BaseModel):
-    input_ids: List[int] = Field(..., description="Token sequence IDs")
+    text: Optional[str] = Field(None, description="Raw input text prompt (automatically tokenized if input_ids is omitted)")
+    input_ids: Optional[List[int]] = Field(None, description="Pre-tokenized token sequence IDs")
 
 
 class OrdinalPredictionResponse(BaseModel):
@@ -33,7 +35,8 @@ class OrdinalPredictionResponse(BaseModel):
 
 
 class DensityPredictionRequest(BaseModel):
-    input_ids: List[int] = Field(..., description="Token sequence IDs")
+    text: Optional[str] = Field(None, description="Raw input text prompt (automatically tokenized if input_ids is omitted)")
+    input_ids: Optional[List[int]] = Field(None, description="Pre-tokenized token sequence IDs")
 
 
 class DensityPredictionResponse(BaseModel):

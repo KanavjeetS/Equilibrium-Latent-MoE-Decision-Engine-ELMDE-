@@ -70,8 +70,8 @@ class ContractiveEquilibriumCore(nn.Module):
         """
         Executes one contractive recurrent transition step: Psi_theta(z, z_0, M_KV).
         """
-        # 1. Residual anchor injection
-        z_anchored = z + 0.1 * self.anchor_proj(z_anchor)
+        # 1. Residual anchor injection (convex anchor damping)
+        z_anchored = 0.9 * z + 0.1 * self.anchor_proj(z_anchor)
 
         # 2. MLA Cross-Attention in Absorb Mode over persistent prefix cache
         z_norm = self.norm_attn(z_anchored)
@@ -82,15 +82,15 @@ class ContractiveEquilibriumCore(nn.Module):
             positions=slot_positions,
             mode="absorb"
         )
-        z_mid = z_anchored + attn_out
+        z_mid = 0.85 * z_anchored + 0.15 * attn_out
 
         # 3. Routed Sparse MoE
         z_moe_norm = self.norm_moe(z_mid)
         moe_out, aux_loss = self.moe(z_moe_norm)
-        z_next_unbounded = z_mid + moe_out
+        z_next_unbounded = 0.85 * z_mid + 0.15 * moe_out
 
-        # 4. Strict Lipschitz bounding via scaled tanh projection
-        bound = torch.clamp(torch.abs(self.contractive_scale), 0.5, 0.99)
+        # 4. Strict Lipschitz bounding via scaled tanh projection (Lip bound < 0.92)
+        bound = torch.clamp(torch.abs(self.contractive_scale), 0.50, 0.92)
         psi = bound * torch.tanh(z_next_unbounded / 4.0) * 4.0
         return psi, aux_loss
 

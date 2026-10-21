@@ -6,6 +6,7 @@ from .sparse_moe import SparseMoELayer
 from .equilibrium_core import ContractiveEquilibriumCore
 from .heads import HeteroscedasticGlobalChoiceHead, CORNHead, BetaDensityHead
 from .model import ELMDEModel
+from .foundation_model import ELMDEFoundationModel
 
 __all__ = [
     "PreRMSNorm",
@@ -18,4 +19,5 @@ __all__ = [
     "CORNHead",
     "BetaDensityHead",
     "ELMDEModel",
+    "ELMDEFoundationModel",
 ]

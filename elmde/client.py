@@ -22,32 +22,55 @@ class ELMDEClient:
 
     def predict_choice(
         self,
-        input_ids: List[int],
         candidate_embeddings: List[List[float]],
+        input_ids: Optional[List[int]] = None,
+        text: Optional[str] = None,
         valid_mask: Optional[List[bool]] = None
     ) -> Dict[str, Any]:
-        """Queries discrete choice prediction head."""
+        """Queries discrete choice prediction head via token IDs or raw text."""
         payload = {
-            "input_ids": input_ids,
             "candidate_embeddings": candidate_embeddings,
             "valid_mask": valid_mask
         }
+        if input_ids is not None:
+            payload["input_ids"] = input_ids
+        if text is not None:
+            payload["text"] = text
+
         with httpx.Client(timeout=self.timeout) as client:
             resp = client.post(f"{self.base_url}/v1/predict/choice", json=payload)
             resp.raise_for_status()
             return resp.json()
 
-    def predict_ordinal(self, input_ids: List[int]) -> Dict[str, Any]:
-        """Queries rank-consistent CORN ordinal regression head."""
-        payload = {"input_ids": input_ids}
+    def predict_ordinal(
+        self,
+        input_ids: Optional[List[int]] = None,
+        text: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Queries rank-consistent CORN ordinal regression head via token IDs or raw text."""
+        payload = {}
+        if input_ids is not None:
+            payload["input_ids"] = input_ids
+        if text is not None:
+            payload["text"] = text
+
         with httpx.Client(timeout=self.timeout) as client:
             resp = client.post(f"{self.base_url}/v1/predict/ordinal", json=payload)
             resp.raise_for_status()
             return resp.json()
 
-    def predict_density(self, input_ids: List[int]) -> Dict[str, Any]:
-        """Queries continuous bounded Beta density head."""
-        payload = {"input_ids": input_ids}
+    def predict_density(
+        self,
+        input_ids: Optional[List[int]] = None,
+        text: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Queries continuous bounded Beta density head via token IDs or raw text."""
+        payload = {}
+        if input_ids is not None:
+            payload["input_ids"] = input_ids
+        if text is not None:
+            payload["text"] = text
+
         with httpx.Client(timeout=self.timeout) as client:
             resp = client.post(f"{self.base_url}/v1/predict/density", json=payload)
             resp.raise_for_status()

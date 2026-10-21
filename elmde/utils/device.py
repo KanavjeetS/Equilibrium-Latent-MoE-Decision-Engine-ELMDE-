@@ -8,6 +8,12 @@ from typing import Tuple
 import torch
 
 
+def get_optimal_device() -> torch.device:
+    """Returns the best available torch.device."""
+    device, _ = get_optimal_device_and_dtype()
+    return device
+
+
 def get_optimal_device_and_dtype() -> Tuple[torch.device, torch.dtype]:
     """
     Selects the best available hardware accelerator and floating point precision:

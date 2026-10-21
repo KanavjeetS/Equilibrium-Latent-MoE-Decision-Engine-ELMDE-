@@ -33,11 +33,34 @@ DECISIONS_ESCALATED = Counter("elmde_decisions_escalated_total", "Total decision
 # Global model and controller references
 _model: Optional[ELMDEModel] = None
 _controller: Optional[SelectiveConformalRiskController] = None
+_tokenizer = None
+
+
+def _resolve_input_ids(request, device: torch.device, vocab_size: int = 30522) -> torch.Tensor:
+    if request.input_ids is not None:
+        ids = [min(int(x), vocab_size - 1) for x in request.input_ids]
+        if len(ids) == 0:
+            ids = [101]
+        return torch.tensor([ids], dtype=torch.long, device=device)
+    elif request.text is not None:
+        if _tokenizer is not None:
+            try:
+                tensor_ids = _tokenizer.encode_text(request.text, max_length=128, return_tensors="pt")
+                clamped = torch.clamp(tensor_ids, 0, vocab_size - 1)
+                return clamped.to(device)
+            except Exception:
+                ids = [ord(c) % vocab_size for c in request.text[:128]]
+                return torch.tensor([ids], dtype=torch.long, device=device)
+        else:
+            ids = [ord(c) % vocab_size for c in request.text[:128]]
+            return torch.tensor([ids], dtype=torch.long, device=device)
+    else:
+        raise HTTPException(status_code=400, detail="Either 'text' or 'input_ids' must be provided in request payload.")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _model, _controller
+    global _model, _controller, _tokenizer
 
     checkpoint_path = os.path.join("checkpoints", "elmde_production.pt")
     cal_path = os.path.join("checkpoints", "scrc_calibration.json")
@@ -66,6 +89,16 @@ async def lifespan(app: FastAPI):
             _controller.calibrated_tau = 0.85
     else:
         _controller.calibrated_tau = 0.85
+
+    # 3. Initialize tokenizer for raw text serving matching model vocab_size
+    try:
+        from ..data.tokenizer import ELMDETokenizer
+        model_name = "bert-base-uncased" if _model.config.vocab_size == 30522 else "answerdotai/ModernBERT-base"
+        _tokenizer = ELMDETokenizer(model_name_or_path=model_name)
+        print(f"[*] Serving tokenizer: {model_name} (vocab: {_model.config.vocab_size}) initialized.")
+    except Exception as e:
+        print(f"[!] Tokenizer initialization warning: {e}")
+        _tokenizer = None
 
     yield
 
@@ -135,7 +168,7 @@ def predict_choice(request: ChoicePredictionRequest):
 
     start_time = time.perf_counter()
     device = next(_model.parameters()).device
-    input_ids = torch.tensor([request.input_ids], dtype=torch.long, device=device)
+    input_ids = _resolve_input_ids(request, device, _model.config.vocab_size)
     cand_tensor = torch.tensor([request.candidate_embeddings], dtype=torch.float32, device=device)
     mask_tensor = torch.tensor([request.valid_mask], dtype=torch.bool, device=device) if request.valid_mask else None
 
@@ -178,7 +211,7 @@ def predict_ordinal(request: OrdinalPredictionRequest):
 
     start_time = time.perf_counter()
     device = next(_model.parameters()).device
-    input_ids = torch.tensor([request.input_ids], dtype=torch.long, device=device)
+    input_ids = _resolve_input_ids(request, device, _model.config.vocab_size)
 
     with torch.no_grad():
         class_probs, cum_surv, metrics = _model.forward_ordinal(input_ids)
@@ -220,7 +253,7 @@ def predict_density(request: DensityPredictionRequest):
 
     start_time = time.perf_counter()
     device = next(_model.parameters()).device
-    input_ids = torch.tensor([request.input_ids], dtype=torch.long, device=device)
+    input_ids = _resolve_input_ids(request, device, _model.config.vocab_size)
 
     with torch.no_grad():
         mean, var, metrics = _model.forward_density(input_ids)

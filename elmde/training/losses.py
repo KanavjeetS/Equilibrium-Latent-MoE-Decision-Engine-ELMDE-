@@ -44,6 +44,41 @@ class CORNLoss(nn.Module):
         return total_loss / max(total_subsets, 1)
 
 
+class BetaNLLLoss(nn.Module):
+    """
+    Exact Negative Log-Likelihood for Continuous Beta Density Head.
+    Given alpha, beta > 0 and continuous target y in (0, 1):
+    NLL = log Gamma(alpha) + log Gamma(beta) - log Gamma(alpha + beta)
+          - (alpha - 1) * log(y) - (beta - 1) * log(1 - y)
+    """
+    def __init__(self, eps: float = 1e-6):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, alpha: torch.Tensor, beta: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        # Clamp targets strictly inside (0, 1)
+        y = torch.clamp(targets, self.eps, 1.0 - self.eps)
+        alpha = torch.clamp(alpha, self.eps, 100.0)
+        beta = torch.clamp(beta, self.eps, 100.0)
+
+        log_beta_func = torch.lgamma(alpha) + torch.lgamma(beta) - torch.lgamma(alpha + beta)
+        nll = log_beta_func - (alpha - 1.0) * torch.log(y) - (beta - 1.0) * torch.log(1.0 - y)
+        return nll.mean()
+
+
+class HeteroscedasticLoss(nn.Module):
+    """Heteroscedastic Choice Loss with temperature entropy penalty."""
+    def __init__(self, tau_reg: float = 0.01):
+        super().__init__()
+        self.tau_reg = tau_reg
+
+    def forward(self, probs: torch.Tensor, tau: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        log_p = torch.log(probs + 1e-9)
+        ce = F.nll_loss(log_p, targets)
+        reg = self.tau_reg * torch.mean(torch.abs(tau - 1.0))
+        return ce + reg
+
+
 class StrictlyProperScoringRules:
     """Exact implementations of strictly proper scoring rules for probability calibration."""
 

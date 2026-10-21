@@ -36,30 +36,39 @@ ELMDE replaces autoregressive token-by-token emission with **direct continuous m
 
 ```mermaid
 flowchart TD
-    classDef inputStyle fill:#1e1e2f,stroke:#4a4e69,stroke-width:2px,color:#fff;
-    classDef mlaStyle fill:#2b2d42,stroke:#8d99ae,stroke-width:2px,color:#edf2f4;
-    classDef coreStyle fill:#0f4c81,stroke:#1b98e0,stroke-width:2px,color:#fff;
-    classDef headStyle fill:#2d6a4f,stroke:#52b788,stroke-width:2px,color:#fff;
-    classDef gateStyle fill:#6b2d5c,stroke:#b56576,stroke-width:2px,color:#fff;
-    classDef outStyle fill:#14213d,stroke:#fca311,stroke-width:2px,color:#fff;
+    In["Context Input: Raw Text or Jagged Tokens"] --> Enc["Bidirectional Context Encoder / ModernBERT"]
+    Enc --> MLA["Multi-Head Latent Attention (Matrix Absorption)"]
+    MLA --> Bank["Compressed KV Latent Memory Bank (128-d / 32-d)"]
+    
+    Bank --> Core["Contractive Recurrent MoE Core (Max 6 Steps)"]
+    Slots["Working Memory Latent Slots (M = 8)"] --> Core
+    Core --> Recur["Banach Damped Recurrence: rho(J) = 0.6111"]
+    Recur --> Core
+    Core --> ZStar["Equilibrium Fixed-Point Attractor z*"]
+    
+    ZStar --> H1["Heteroscedastic Choice Head (Zero Distortion)"]
+    ZStar --> H2["CORN Monotonic Ordinal Head (Rank Consistent)"]
+    ZStar --> H3["Continuous Beta Density Head (Mean and Variance)"]
+    
+    H1 --> Gate["Selective Conformal Risk Gate (tau* = 0.9977)"]
+    H2 --> Gate
+    H3 --> Gate
+    
+    Gate -->|"Confidence at or above tau*"| Acc["AUTOMATIC ACCEPTANCE (Certified Error at most 1%)"]
+    Gate -->|"Confidence below tau*"| Esc["ABSTAIN AND ESCALATE (Human-in-the-Loop Review)"]
 
-    In["Context Input (Raw Text or Jagged Tokens)"]:::inputStyle --> Enc["Bidirectional Encoder / ModernBERT Backbone"]:::inputStyle
-    Enc --> MLA["Multi-Head Latent Attention (Commutative Matrix Absorption)"]:::mlaStyle
-    MLA --> Bank["Compressed KV Memory Bank (c_kv: 128-d, k_r: 32-d)"]:::mlaStyle
-    
-    Bank --> Core["Contractive Recurrent MoE Core (R <= 6 Iterations)"]:::coreStyle
-    Slots["Working Memory Latent Slots (M = 8)"]:::coreStyle --> Core
-    Core -->|"Banach Damped Update: z_(r+1) = (1-a)z_r + a Psi(z_r)"| Core
-    Core -->|"IFT O(1) Adjoint Grad"| ZStar["Equilibrium Fixed-Point Attractor z*"]:::coreStyle
-    
-    ZStar --> H1["Heteroscedastic Choice Head (D_KL = 0.000)"]:::headStyle
-    ZStar --> H2["CORN Monotonic Ordinal Head (S_k >= S_k+1)"]:::headStyle
-    ZStar --> H3["Continuous Beta Density Head (Mean & Variance)"]:::headStyle
-    
-    H1 & H2 & H3 --> Gate["Selective Conformal Risk Gate (tau* = 0.9977)"]:::gateStyle
-    
-    Gate -->|"Confidence >= tau*"| Acc["AUTOMATIC ACCEPTANCE (Certified Risk <= 1%)"]:::outStyle
-    Gate -->|"Confidence < tau*"| Esc["ABSTAIN & ESCALATE (Human-in-the-Loop Review)"]:::outStyle
+    classDef default fill:#181825,stroke:#45475a,stroke-width:1.5px,color:#cdd6f4;
+    classDef highlight fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#89b4fa;
+    classDef accept fill:#11261f,stroke:#a6e3a1,stroke-width:2px,color:#a6e3a1;
+    classDef escalate fill:#2a1824,stroke:#f38ba8,stroke-width:2px,color:#f38ba8;
+    classDef core fill:#182236,stroke:#74c7ec,stroke-width:2px,color:#74c7ec;
+
+    class In,Enc,MLA,Bank default;
+    class Core,Slots,Recur,ZStar core;
+    class H1,H2,H3 highlight;
+    class Gate default;
+    class Acc accept;
+    class Esc escalate;
 ```
 
 ---

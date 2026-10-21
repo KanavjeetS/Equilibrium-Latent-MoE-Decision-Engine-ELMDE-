@@ -96,6 +96,16 @@ def get_dashboard():
     return "<h1>ELMDE API Running</h1><p>Visit <a href='/docs'>/docs</a> for OpenAPI spec.</p>"
 
 
+@app.get("/architecture", response_class=HTMLResponse, tags=["UI"])
+def get_architecture_showcase():
+    """Serves the interactive animated architecture diagram showcase."""
+    arch_path = os.path.join(os.getcwd(), "animated_architecture.html")
+    if os.path.exists(arch_path):
+        with open(arch_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "<h1>Architecture Showcase</h1><p>animated_architecture.html not found.</p>"
+
+
 @app.get("/metrics", tags=["Observability"])
 def get_metrics():
     """Prometheus metrics endpoint."""

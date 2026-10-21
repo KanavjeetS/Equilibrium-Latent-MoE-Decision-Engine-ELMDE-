@@ -1,0 +1,4 @@
+{
+  "tau_star": 0.9976917904410393,
+  "warning": "Strict bound could not be met across full grid; fallback to max confidence."
+}

@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Myopic Token Masking Distorts Model Intent While Lookahead Alignment Restores Fidelity</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js and Plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+
+    <style>
+      @font-face {
+          font-family: "Google Sans";
+          src: url("https://fonts.gstatic.com/s/googlesans/v58/4UaRrENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iq2vgCI.woff2") format("woff2");
+          font-weight: 400; font-style: normal; font-display: swap;
+      }
+
+      :root, html[data-theme="light"] {
+          --surface-color: #FFFFFF;
+          --on-surface: #1B1C1D;
+          --on-surface-variant: #575B5F;
+          --on-surface-low: #727676;
+
+          --outline: #747775;
+          --outline-variant: #C4C7C5;
+
+          --google-blue: #1A73E8;
+          --cyan: #12B5CB;
+          --magenta: #F538A0;
+          --tangerine: #FA903E;
+          --lavender: #C58AF9;
+          --mint-green: #81C995;
+          --red: #D93025;
+          --yellow: #FCC934;
+
+          --peer-medium: #AAAAAA;
+          --peer-light: #CCCCCC;
+      }
+      html[data-theme="dark"] {
+          --surface-color: #141414;
+          --on-surface: #FFFFFF;
+          --on-surface-variant: #A2A9B0;
+          --on-surface-low: #9A9B9C;
+
+          --outline: #9A9B9C;
+          --outline-variant: #4A5050;
+
+          --google-blue: #1A73E8;
+          --cyan: #12B5CB;
+          --magenta: #F538A0;
+          --tangerine: #FA903E;
+          --lavender: #C58AF9;
+          --mint-green: #81C995;
+          --red: #D93025;
+          --yellow: #FCC934;
+
+          --peer-medium: #ACAFAF;
+          --peer-light: #7D7F7F;
+      }
+
+      @media (pointer: fine) {
+          ::-webkit-scrollbar, ::-webkit-scrollbar-corner {
+              background: transparent;
+              height: 12px;
+              width: 12px;
+          }
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: ['class', '[data-theme="dark"]'],
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"Google Sans"', '"Open Sans"', 'sans-serif'] },
+            colors: {
+              surface: 'var(--surface-color)',
+              'on-surface': 'var(--on-surface)',
+              'on-surface-variant': 'var(--on-surface-variant)',
+              outline: 'var(--outline)',
+              'outline-variant': 'var(--outline-variant)',
+            }
+          }
+        }
+      }
+    </script>
+  </head>
+  <body class="font-sans bg-surface text-on-surface m-0 p-4 sm:p-6 md:p-8 flex justify-center w-full">
+    <figure class="w-full max-w-[800px] flex flex-col gap-8">
+      <div>
+        <h3 class="text-2xl sm:text-3xl font-normal text-on-surface leading-tight tracking-tight">
+          Myopic Token Masking Distorts <b>Model Intent</b> While Lookahead Alignment Restores Fidelity
+        </h3>
+      </div>
+
+      <!-- Visualization Container -->
+      <div id="viz-container" class="relative w-full flex flex-col gap-10">
+        
+        <!-- PANEL A -->
+        <div class="flex flex-col gap-3 w-full">
+          <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+            <h4 class="text-base sm:text-lg font-medium text-on-surface">
+              Panel A: Token Probability Mass Allocation at Step 0 Decision Branch
+            </h4>
+            <span class="text-xs text-on-surface-variant font-mono">
+              p(x<sub>i</sub> | x<sub>&lt;i</sub>, &alpha;)
+            </span>
+          </div>
+
+          <!-- Custom Legend -->
+          <div class="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs text-on-surface-variant">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-[#CCCCCC] dark:bg-[#7D7F7F] inline-block"></span>
+              <span>Unconstrained Prior (p<sub>LLM</sub>)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-[#D93025] inline-block"></span>
+              <span>Greedy CDM Masking (Distorted)</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3 h-3 rounded-sm bg-[#1A73E8] inline-block"></span>
+              <span>Lookahead-Aligned / Target (SHIM / Exact)</span>
+            </div>
+          </div>
+
+          <!-- Tree Continuation Meta Indicators -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs py-1.5 px-3 rounded bg-surface border border-outline-variant/50">
+            <div><span class="font-semibold text-on-surface">Token '0':</span> &gamma;(0) = 2/17 <span class="text-red-500 font-medium">(Restricted)</span></div>
+            <div><span class="font-semibold text-on-surface">Token '1':</span> &gamma;(1) = 32/17 <span class="text-blue-600 font-medium">(Open Path)</span></div>
+            <div><span class="font-semibold text-on-surface">cat &rarr; s:</span> P(s|cat) = 0.90</div>
+            <div><span class="font-semibold text-on-surface">dog:</span> Terminal EOS</div>
+          </div>
+
+          <!-- Canvas Wrapper Pattern -->
+          <div class="relative w-full h-[320px] min-h-[300px]">
+            <canvas id="chart-panel-a"></canvas>
+          </div>
+        </div>
+
+        <!-- PANEL B -->
+        <div class="flex flex-col gap-3 w-full border-t border-outline-variant/40 pt-6">
+          <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+            <h4 class="text-base sm:text-lg font-medium text-on-surface">
+              Panel B: Empirical KL-Divergence Reduction Multiplier over Greedy CDM
+            </h4>
+            <span class="text-xs text-on-surface-variant font-mono">
+              Higher = Greater Bayesian Fidelity (&times; Log Scale)
+            </span>
+          </div>
+
+          <!-- Canvas Wrapper Pattern -->
+          <div class="relative w-full h-[220px] min-h-[200px]">
+            <canvas id="chart-panel-b"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <figcaption class="flex flex-col gap-3">
+        <span id="caption-text" class="text-sm text-on-surface-variant leading-relaxed">
+          Top: In a prefix-sharing constraint tree where path '0' leads to a restricted continuation (survival correction factor 2/17) and path '1' leads to an unconstrained continuation (correction factor 32/17), standard greedy masking assigns equal 0.495 prior mass to both valid prefixes, whereas lookahead-adjusted decoding shifts <b>94.1% of the probability mass</b> to path '1'. Bottom: Empirical KL-divergence reduction factors over greedy constrained decoding across 14 tasks show MCMC-Restart achieving a 4.27x improvement after 10 sequential iterations, while SHIM lookahead logit processors achieve up to 113x lower divergence.
+        </span>
+        <div class="text-xs text-on-surface-variant [&_a]:underline [&_a]:text-inherit">
+          Data sources: <a href="https://starai.cs.ucla.edu/papers/OzguArxiv26.pdf" target="_blank" rel="noopener noreferrer">StarAI UCLA (Ozgu et al., 2026)</a>, <a href="https://openreview.net/forum?id=M1b7IuY6Co&noteId=zIDosfH7ka" target="_blank" rel="noopener noreferrer">OpenReview (Loula et al., 2024)</a>, <a href="https://starai.cs.ucla.edu/papers/OzguArxiv26.pdf" target="_blank" rel="noopener noreferrer">Prefix-Tree Autoregressive Distortion Verification</a>
+        </div>
+      </figcaption>
+    </figure>
+
+    <script>
+      let chartA = null;
+      let chartB = null;
+
+      function getThemeColors() {
+        const rootStyle = getComputedStyle(document.documentElement);
+        return {
+          surface: rootStyle.getPropertyValue('--surface-color').trim(),
+          onSurface: rootStyle.getPropertyValue('--on-surface').trim(),
+          onSurfaceVariant: rootStyle.getPropertyValue('--on-surface-variant').trim(),
+          outlineVariant: rootStyle.getPropertyValue('--outline-variant').trim(),
+          googleBlue: rootStyle.getPropertyValue('--google-blue').trim(),
+          red: rootStyle.getPropertyValue('--red').trim(),
+          peerLight: rootStyle.getPropertyValue('--peer-light').trim(),
+          peerMedium: rootStyle.getPropertyValue('--peer-medium').trim(),
+          tangerine: rootStyle.getPropertyValue('--tangerine').trim(),
+          mintGreen: rootStyle.getPropertyValue('--mint-green').trim(),
+        };
+      }
+
+      function initCharts() {
+        Chart.register(ChartDataLabels);
+
+        const colors = getThemeColors();
+        const fontStack = "'Google Sans', 'Open Sans', sans-serif";
+
+        Chart.defaults.font.family = fontStack;
+        Chart.defaults.color = colors.onSurface;
+
+        // Common Tooltip Styling
+        const baseTooltipConfig = {
+          backgroundColor: colors.surface,
+          titleColor: colors.onSurface,
+          bodyColor: colors.onSurfaceVariant,
+          borderColor: colors.outlineVariant,
+          borderWidth: 1,
+          padding: 10,
+          titleFont: { family: fontStack, size: 13, weight: 'bold' },
+          bodyFont: { family: fontStack, size: 12 },
+          displayColors: true,
+          boxPadding: 4,
+          cornerRadius: 6
+        };
+
+        // --- Panel A: Grouped Bar Chart ---
+        const ctxA = document.getElementById('chart-panel-a').getContext('2d');
+        const labelsA = [
+          ["Token '0'", "(Constrained)"],
+          ["Token '1'", "(Open Path)"],
+          ["Token '2'", "(Invalid)"],
+          ["Token 'A'", "(Invalid)"],
+          ["Branch cat→s", "(Prefix Shared)"],
+          ["Branch dog", "(Direct EOS)"]
+        ];
+
+        chartA = new Chart(ctxA, {
+          type: 'bar',
+          data: {
+            labels: labelsA,
+            datasets: [
+              {
+                label: 'Unconstrained Prior (pLLM)',
+                data: [0.495, 0.495, 0.007, 0.003, 0.450, 0.100],
+                backgroundColor: colors.peerLight,
+                borderColor: colors.peerMedium,
+                borderWidth: 1,
+                borderRadius: 4,
+                clip: false
+              },
+              {
+                label: 'Greedy CDM Masking',
+                data: [0.500, 0.500, 0.000, 0.000, 0.818, 0.182],
+                backgroundColor: colors.red,
+                borderColor: colors.red,
+                borderWidth: 1,
+                borderRadius: 4,
+                clip: false
+              },
+              {
+                label: 'Lookahead-Aligned / Exact',
+                data: [0.059, 0.941, 0.000, 0.000, 0.802, 0.198],
+                backgroundColor: colors.googleBlue,
+                borderColor: colors.googleBlue,
+                borderWidth: 1,
+                borderRadius: 4,
+                clip: false
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+              padding: { top: 22, left: 0, right: 8, bottom: 0 }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                ...baseTooltipConfig,
+                callbacks: {
+                  title: function(items) {
+                    return items[0].label.replace(',', ' ');
+                  },
+                  label: function(item) {
+                    return ` ${item.dataset.label}: ${(item.raw).toFixed(3)} (${(item.raw * 100).toFixed(1)}%)`;
+                  }
+                }
+              },
+              datalabels: {
+                font: { family: fontStack, size: 11, weight: '600' },
+                color: colors.onSurface,
+                anchor: 'end',
+                align: 'top',
+                offset: 2,
+                formatter: (val) => {
+                  if (val === 0) return '';
+                  return val >= 0.1 ? val.toFixed(3) : val.toFixed(3);
+                }
+              }
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: {
+                  color: colors.onSurfaceVariant,
+                  font: { family: fontStack, size: 12 },
+                  maxRotation: 0,
+                  minRotation: 0
+                }
+              },
+              y: {
+                min: 0,
+                max: 1.0,
+                grace: '15%',
+                grid: {
+                  color: colors.outlineVariant + '33',
+                  drawBorder: false
+                },
+                ticks: {
+                  color: colors.onSurfaceVariant,
+                  font: { family: fontStack, size: 12 },
+                  stepSize: 0.2,
+                  callback: (v) => v.toFixed(1)
+                },
+                title: {
+                  display: true,
+                  text: 'Assigned Probability Mass',
+                  color: colors.onSurfaceVariant,
+                  font: { family: fontStack, size: 12 }
+                }
+              }
+            }
+          }
+        });
+
+        // --- Panel B: Horizontal Bar Chart ---
+        const ctxB = document.getElementById('chart-panel-b').getContext('2d');
+        const labelsB = [
+          'Greedy CDM (Standard Masking Baseline)',
+          'MCMC-Priority (Loula et al., 10 iterations)',
+          'MCMC-Restart (Loula et al., 10 iterations)',
+          'SHIM Lookahead Processor (Ozgu et al., Single-Pass)'
+        ];
+
+        const barColorsB = [
+          colors.red,
+          colors.tangerine,
+          colors.mintGreen,
+          colors.googleBlue
+        ];
+
+        chartB = new Chart(ctxB, {
+          type: 'bar',
+          data: {
+            labels: labelsB,
+            datasets: [{
+              label: 'KL-Divergence Reduction Multiplier',
+              data: [1.0, 3.45, 4.27, 113.0],
+              backgroundColor: barColorsB,
+              borderRadius: 5,
+              clip: false
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+              padding: { top: 10, left: 0, right: 60, bottom: 0 }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                ...baseTooltipConfig,
+                callbacks: {
+                  label: function(item) {
+                    return ` KL Reduction Factor: ${item.raw.toFixed(2)}×`;
+                  }
+                }
+              },
+              datalabels: {
+                font: { family: fontStack, size: 12, weight: '700' },
+                color: colors.onSurface,
+                anchor: 'end',
+                align: 'right',
+                offset: 8,
+                formatter: (val) => `${val.toFixed(val === 1.0 ? 1 : 2)}×`
+              }
+            },
+            scales: {
+              x: {
+                type: 'logarithmic',
+                min: 0.8,
+                max: 180,
+                grid: {
+                  color: colors.outlineVariant + '33',
+                  drawBorder: false
+                },
+                ticks: {
+                  color: colors.onSurfaceVariant,
+                  font: { family: fontStack, size: 12 },
+                  callback: function(value) {
+                    if ([1, 2, 5, 10, 20, 50, 100].includes(value)) {
+                      return value + '×';
+                    }
+                    return null;
+                  }
+                },
+                title: {
+                  display: true,
+                  text: 'KL-Divergence Reduction Multiplier (Logarithmic Scale)',
+                  color: colors.onSurfaceVariant,
+                  font: { family: fontStack, size: 12 }
+                }
+              },
+              y: {
+                grid: { display: false },
+                ticks: {
+                  color: colors.onSurface,
+                  font: { family: fontStack, size: 12, weight: '500' }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      function updateChartsOnThemeChange() {
+        if (!chartA || !chartB) return;
+        const colors = getThemeColors();
+        const fontStack = "'Google Sans', 'Open Sans', sans-serif";
+
+        Chart.defaults.color = colors.onSurface;
+
+        // Update Chart A
+        chartA.data.datasets[0].backgroundColor = colors.peerLight;
+        chartA.data.datasets[0].borderColor = colors.peerMedium;
+        chartA.data.datasets[1].backgroundColor = colors.red;
+        chartA.data.datasets[1].borderColor = colors.red;
+        chartA.data.datasets[2].backgroundColor = colors.googleBlue;
+        chartA.data.datasets[2].borderColor = colors.googleBlue;
+
+        chartA.options.plugins.datalabels.color = colors.onSurface;
+        chartA.options.scales.x.ticks.color = colors.onSurfaceVariant;
+        chartA.options.scales.y.ticks.color = colors.onSurfaceVariant;
+        chartA.options.scales.y.title.color = colors.onSurfaceVariant;
+        chartA.options.scales.y.grid.color = colors.outlineVariant + '33';
+        chartA.options.plugins.tooltip.backgroundColor = colors.surface;
+        chartA.options.plugins.tooltip.titleColor = colors.onSurface;
+        chartA.options.plugins.tooltip.bodyColor = colors.onSurfaceVariant;
+        chartA.options.plugins.tooltip.borderColor = colors.outlineVariant;
+        chartA.update();
+
+        // Update Chart B
+        chartB.data.datasets[0].backgroundColor = [
+          colors.red,
+          colors.tangerine,
+          colors.mintGreen,
+          colors.googleBlue
+        ];
+        chartB.options.plugins.datalabels.color = colors.onSurface;
+        chartB.options.scales.x.ticks.color = colors.onSurfaceVariant;
+        chartB.options.scales.x.title.color = colors.onSurfaceVariant;
+        chartB.options.scales.x.grid.color = colors.outlineVariant + '33';
+        chartB.options.scales.y.ticks.color = colors.onSurface;
+        chartB.options.plugins.tooltip.backgroundColor = colors.surface;
+        chartB.options.plugins.tooltip.titleColor = colors.onSurface;
+        chartB.options.plugins.tooltip.bodyColor = colors.onSurfaceVariant;
+        chartB.options.plugins.tooltip.borderColor = colors.outlineVariant;
+        chartB.update();
+      }
+
+      window.addEventListener("message", (event) => {
+        if (event.data && (event.data.theme === "light" || event.data.theme === "dark")) {
+          document.documentElement.setAttribute("data-theme", event.data.theme);
+          updateChartsOnThemeChange();
+        }
+      });
+
+      document.fonts.ready.then(() => {
+        initCharts();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,133 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture of the <b>Equilibrium Latent-MoE</b> Decision Engine</title>
+    <!-- 1. Load Google Fonts -->
+    <style>
+        @font-face {
+            font-family: "Google Sans";
+            src: url("https://fonts.gstatic.com/s/googlesans/v58/4UaRrENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iq2vgCI.woff2")  format("woff2");
+            font-weight: 400; font-style: normal;
+        }
+    </style>
+
+    <!-- 2. CSS with Trimmed Theme Variables -->
+    <style>
+        :root {
+            /* --- Core Surface & Text Colors --- */
+            --surface: #FFFFFF;
+            --on-surface: #1B1C1D;
+            --on-surface-variant: #575B5F;
+            --on-surface-low: #727676;
+            /* --- Core Accent & Outline Colors (Good to keep for flexibility) --- */
+            --outline: #747775;
+            --primary: #0B57D0;
+        }
+        @media (prefers-color-scheme: dark) {
+          :root, html {
+              /* --- Core Surface & Text Colors --- */
+              --surface: #141414;
+              --on-surface: #FFFFFF;
+              --on-surface-variant: #A2A9B0;
+              --on-surface-low: #9A9B9C;
+              /* --- Core Accent & Outline Colors (Good to keep for flexibility) --- */
+              --outline: #9A9B9C;
+              --primary: #A8C7FA;
+          }
+        }
+        html[data-theme="light"] {
+            /* --- Core Surface & Text Colors --- */
+            --surface: #FFFFFF;
+            --on-surface: #1B1C1D;
+            --on-surface-variant: #575B5F;
+            --on-surface-low: #727676;
+            /* --- Core Accent & Outline Colors (Good to keep for flexibility) --- */
+            --outline: #747775;
+            --primary: #0B57D0;
+        }
+        html[data-theme="dark"] {
+            /* --- Core Surface & Text Colors --- */
+            --surface: #141414;
+            --on-surface: #FFFFFF;
+            --on-surface-variant: #A2A9B0;
+            --on-surface-low: #9A9B9C;
+            /* --- Core Accent & Outline Colors (Good to keep for flexibility) --- */
+            --outline: #9A9B9C;
+            --primary: #A8C7FA;
+        }
+        @media (pointer: fine) {
+          ::-webkit-scrollbar, ::-webkit-scrollbar-corner {
+              background: transparent;
+              height: 12px;
+              width: 12px;
+          }
+        }
+        body {
+            font-family: "Google Sans", sans-serif;
+            background-color: var(--surface);
+            color: var(--on-surface);
+            margin: 0;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        h3 {
+            font-family: "Google Sans", sans-serif;
+            font-weight: 400; /* Not bold */
+            font-size: 1.75rem;
+            color: var(--on-surface);
+            text-align: left;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+        .image-container {
+            width: 100%;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+        .image-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 8px;
+        }
+        .caption {
+            color: var(--on-surface-variant);
+            font-family: "Google Sans", sans-serif;
+            font-weight: 400; /* Not bold */
+            text-align: left;
+            font-size: 0.9em;
+            margin-top: 10px;
+            padding-left: 10px;
+            padding-right: 10px;
+            line-height: 1.5;
+        }
+        .sources {
+            font-size: 0.8em;
+            margin-top: 5px;
+            color: var(--on-surface-low);
+        }
+    </style>
+</head>
+<body>
+    <h3>Architecture of the <b>Equilibrium Latent-MoE</b> Decision Engine</h3>
+    <div class="image-container">
+        <img src="https://lh3.googleusercontent.com/gg/AJWXcNfxRls718hSbgy5o5whEZknWT97owE-AOpERpkrMDDII-vx4IXyiYJkmTY5pdAleyujbw9QUxm2A0sIWFZx2DZucbOTd-PkO58dT34XEzVqGo-NwByZRFUlz9QRfQj97z9XiGVorLB9N9gpIO5eSdxq3rS88rgnfpOMn_x1BUlWDLKMSsD-=s0" alt="Architecture of the <b>Equilibrium Latent-MoE</b> Decision Engine">
+    </div>
+    <div class="caption">
+        End-to-end schematic of the Equilibrium Latent-MoE Decision Engine. Input sequences undergo zero-padding concatenation and pass through alternating global and local sliding-window bidirectional blocks. Context states are compressed into a low-rank latent cache via Multi-Head Latent Attention (MLA) using commutative matrix absorption. A weight-tied Contractive Sparse MoE core iterates the latent representation to a fixed-point attractor, which feeds three exact constraint-manifold heads—Discrete Choice, Rank-Consistent Ordinal (CORN), and Continuous Density—certified by a two-stage Selective Conformal Risk Control gate.
+        <div class="sources">
+        </div>
+    </div>
+    <script>
+        window.addEventListener("message", (event) => {{
+            if (event.data && (event.data.theme === "light" || event.data.theme === "dark")) {{
+                document.documentElement.setAttribute("data-theme", event.data.theme);
+            }}
+        }});
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+services:
+  elmde-decision-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: elmde:latest
+    container_name: elmde_serving_engine
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - LOG_LEVEL=info
+      - OMP_NUM_THREADS=4
+    volumes:
+      - ./checkpoints:/app/checkpoints
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

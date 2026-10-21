@@ -9,7 +9,7 @@ import httpx
 
 class ELMDEClient:
     """Production client SDK for communicating with the ELMDE Serving API."""
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 30.0):
+    def __init__(self, base_url: str = "http://localhost:8008", timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 

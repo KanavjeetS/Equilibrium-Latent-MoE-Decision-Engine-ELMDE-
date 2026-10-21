@@ -6,7 +6,7 @@ FROM python:3.12-slim AS base
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=8000
+    PORT=8008
 
 WORKDIR /app
 
@@ -32,11 +32,11 @@ RUN useradd -m -u 1000 elmdeuser && \
     chown -R elmdeuser:elmdeuser /app
 USER elmdeuser
 
-EXPOSE 8000
+EXPOSE 8008
 
 # Health check probe
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8008/health || exit 1
 
 # Launch production multi-worker uvicorn server
-CMD ["uvicorn", "elmde.serving:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "elmde.serving:app", "--host", "0.0.0.0", "--port", "8008", "--workers", "2"]

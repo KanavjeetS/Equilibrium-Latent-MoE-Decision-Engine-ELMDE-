@@ -87,6 +87,6 @@ d:\Advanced Non-Aggressive Decision Model\
 
 ### 3. Launch the Production FastAPI Serving API
 ```powershell
-.venv\Scripts\python.exe -m uvicorn elmde.serving:app --host 0.0.0.0 --port 8000 --reload
+.venv\Scripts\python.exe -m uvicorn elmde.serving:app --host 0.0.0.0 --port 8008 --reload
 ```
-Interactive Swagger API documentation will be available at `http://localhost:8000/docs`.
+Interactive Swagger API documentation will be available at `http://localhost:8008/docs`, and the live decision console at `http://localhost:8008/`.

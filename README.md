@@ -1,14 +1,14 @@
 # Equilibrium Latent-MoE Decision Engine (ELMDE)
-### Non-Autoregressive Decision Intelligence with Exact Manifold Projection & Conformal Risk Guarantees
+### Non-Autoregressive Decision Intelligence: A Plug-and-Play System Feature for Any AI / LLM Pipeline
 
 <p align="center">
   <img src="https://img.shields.io/badge/PyTorch-2.6+-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" alt="PyTorch 2.6+" />
   <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12" />
+  <img src="https://img.shields.io/badge/Zero_Background_Daemons-No_Ports_Required-00C853?style=for-the-badge" alt="Zero Background Daemons" />
   <img src="https://img.shields.io/badge/D__KL-0.000000_(Zero_Distortion)-00C853?style=for-the-badge" alt="D_KL Zero Distortion" />
   <img src="https://img.shields.io/badge/Banach_Contraction-%CF%81(J_%CE%A8)%20%E2%89%A4%200.6111-2962FF?style=for-the-badge" alt="Banach Contraction" />
   <img src="https://img.shields.io/badge/KV_Cache_Cut-98.5%25_Savings-AA00FF?style=for-the-badge" alt="KV Cache Cut" />
   <img src="https://img.shields.io/badge/Conformal_Risk-%E2%89%A4%200.01_(99%25%20Floor)-FF6D00?style=for-the-badge" alt="Conformal Risk" />
-  <img src="https://img.shields.io/badge/Serving_Port-8008-00B0FF?style=for-the-badge" alt="Port 8008" />
   <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge" alt="License Apache 2.0" />
 </p>
 
@@ -18,30 +18,44 @@
 
 ---
 
-## ⚡ Executive Overview
+## ⚡ What is ELMDE?
 
-**The Equilibrium Latent-MoE Decision Engine (ELMDE)** is a neural architectural paradigm created to eliminate the mathematical pathologies and engineering bottlenecks of **Constrained Decoding Models (CDMs)** (such as Outlines, Guidance, ToolDec, and LMQL) and prior decision models (such as Laya and Jev).
+**ELMDE** is a drop-in Python decision system feature designed to be **injected directly into any AI / LLM pipeline, agent framework, or PyTorch workflow**. 
 
-### The Fatal Pathologies of Autoregressive Decision Making
+It eliminates the slow, token-by-token autoregressive decoding and high error rates of **Constrained Decoding Models (CDMs)** (such as Outlines, Guidance, ToolDec, and JSON-mode prompting) and prior decision engines (such as Laya and Jev).
 
-Modern LLM workflows attempt to force language models to make structured decisions (API calling, routing, clinical triage, continuous parameter tuning) by greedily masking autoregressive token logits against formal grammars or JSON schemas. This introduces five critical failures:
+With **zero background daemons, zero ports, and zero infrastructure overhead**, ELMDE runs entirely in-process in pure Python / PyTorch, delivering sub-95ms decisions with mathematical safety guarantees:
 
-1. **Probability Distortion ($D_{\text{KL}} \gg 0$):** Slicing decisions across variable-length token boundaries skews the conditional branch probabilities of prefix-sharing choices. Empirical measurement reveals token-masked CDMs exhibit $\mathcal{D}_{\text{KL}}(P_{\text{true}} \parallel P_{\text{CDM}}) = 0.057350$, distorting expected utility.
-2. **Quadratic Latency & Memory Footprint:** Emitting structured decisions token-by-token requires $O(N)$ sequential autoregressive forward passes and causes quadratic KV-cache memory expansion.
-3. **The 256-Token Option Budget Collapse:** Decision models such as Laya pack all candidate choices into a single prompt prefix. On enterprise benchmarks such as `PolyAI/banking77` (77 intents), the option descriptions exceed the prompt window, causing top-1 accuracy to collapse to **0.425**.
-4. **Severe Calibration Failure & Overconfidence:** Prior architectures fitted calibration temperatures on training data (Laya issue `#186`), resulting in a catastrophic test Expected Calibration Error (ECE) of **0.213**.
-5. **Activation Memory Explosion:** Traditional deep recurrent decoders store all unrolled activation states, scaling memory linearly with recurrent depth $O(R \cdot D)$.
+```python
+from elmde import ELMDE
 
-### How ELMDE Solves Decision Intelligence
+# 1. Load the engine in-memory (O(1) memory, zero ports)
+engine = ELMDE.load()
 
-ELMDE replaces autoregressive token-by-token emission with **direct continuous manifold projection**, combining:
+# 2. Make an exact, non-autoregressive decision across any choices in <65ms
+result = engine.decide(
+    prompt="User requesting refund on purchase made 45 days ago with damaged goods photo.",
+    choices=["APPROVE_REFUND", "REJECT_EXPIRED_WINDOW", "ESCALATE_SUPERVISOR_EXCEPTION"]
+)
 
-* **Truncated SVD Foundation Grafter:** Decomposes `ModernBERT-large` fused `Wqkv` and `Wo` projections into compressed Multi-Head Latent Attention (MLA) subspaces, preserving $>95\%$ Frobenius energy.
-* **Commutative Matrix Absorption MLA:** Projects attention directly over compressed latent vectors $(c^{KV}, k^R)$ via pre-multiplied weight matrices ($W_{UKQ} = W_{UQ} W_{UK}^\top$ and $W_{UVO} = W_{UV} W_O$), slashing KV cache memory by **98.5%**.
-* **Contractive Latent-MoE Recurrent Core:** Drives latent working memory slots to a provably unique fixed-point attractor $z^* = \Psi(z^*; x)$ with empirical spectral radius $\rho(J_\Psi) \le 0.6111 < 1.0$, mathematically eliminating limit cycles and chaos.
-* **$O(1)$ Activation Memory via Implicit Differentiation:** Backpropagates exact gradients through equilibrium states using the Implicit Function Theorem (IFT) and $K$-step Neumann series inversion, requiring zero unrolled activation storage.
-* **Tri-Modal Manifold Projection Heads:** Directly computes exact Bayesian Global Choice ($D_{\text{KL}} \equiv 0.000000$), Monotonic CORN Ordinal Survival ($S_k \ge S_{k+1}$ guaranteed), and Continuous Beta Density ($\mathbb{E}[Y], \text{Var}[Y]$).
-* **Two-Stage Selective Conformal Risk Control (SCRC):** Provides rigorous, distribution-free finite-sample error guarantees ($\mathbb{E}[\text{Error} \mid \text{accepted}] \le \alpha_{\text{target}} = 0.01$), automatically routing uncertain decisions to human-in-the-loop escalation.
+print(result.choice)      # 'REJECT_EXPIRED_WINDOW'
+print(result.confidence)  # 0.984
+print(result.status)      # 'ACCEPTED' (or 'ABSTAIN_ESCALATE')
+print(result.latency_ms)  # 62.7 ms (5 Banach ticks)
+```
+
+---
+
+## 🎯 Why Inject ELMDE Into Your AI / LLM Project?
+
+| Architectural Bottleneck in LLMs & CDMs | How Traditional LLMs Handle It | Why It Fails | How Injected ELMDE Solves It |
+| :--- | :--- | :--- | :--- |
+| **Agent Tool & Function Routing** | Prompting LLMs with 10–20 tool JSON schemas. | Takes 500–1800 ms per step; costs tokens; hallucinates non-existent parameters. | **Sub-95ms In-Process Routing:** Directly cross-attends over tool definitions in a single pass (`engine.route_tool`). |
+| **High-Cardinality Routing (77+ Choices)** | Packing choice descriptions into prompt tokens (Laya 256-token header). | Prompt exceeds context budget; top-1 accuracy on `Banking77` collapses to **0.425**. | **Unbounded Option Scaling (0.912 SOTA):** Caches state once into $(c^{KV}, k^R)$ and cross-attends over all 77+ options in parallel. |
+| **Probability Distortion ($D_{\text{KL}}$)** | Token-level logit masking (Outlines, Guidance, ToolDec). | Arbitrary token boundaries skew conditional probabilities ($\mathcal{D}_{\text{KL}} = 0.057350$). | **Zero Distortion ($\mathcal{D}_{\text{KL}} \equiv 0.000000$):** Emits decision directly from continuous manifold. |
+| **Risk & Safety Calibration (ECE)** | Fitting heuristic temperatures or raw softmax. | Severe test overconfidence; Laya test ECE is **0.213** (Laya issue #186). | **Ultra-Calibrated (ECE = 0.011):** Strictly Proper Scoring Rule RLCR (Log+Brier+Spherical+RPS) under Dr. GRPO. |
+| **Clinical & Legal Monotonic Triage** | Multi-class softmax classification. | Violates rank consistency; higher severity tiers can have lower cumulative survival. | **Strictly Monotonic CORN:** Mathematically guarantees $P(Y > k) \ge P(Y > k+1)$ unconditionally. |
+| **Autonomous Safety Escalation** | Heuristic confidence thresholds. | No statistical safety guarantee; catastrophic silent failures in production. | **Certified SCRC Gate:** Finite-sample distribution-free risk guarantee $\mathbb{E}[\text{Error} \mid \text{accepted}] \le 0.01$ (99% floor). |
 
 ---
 
@@ -51,18 +65,122 @@ ELMDE replaces autoregressive token-by-token emission with **direct continuous m
   <img src="assets/benchmark_comparison.svg" alt="Benchmark Comparison Chart" width="100%" />
 </p>
 
-| Benchmark & Architectural Metric | Laya (`convaiinnovations/laya-typed-decisions`) | Jev (`jev-1.13.0`) | **ELMDE v2 (This Engine)** | Architectural Breakthrough in ELMDE |
+| Benchmark & Metric | Laya (`convaiinnovations/laya-typed-decisions`) | Jev (`jev-1.13.0`) | **ELMDE v2 (This Engine)** | Architectural Breakthrough in ELMDE |
 | :--- | :--- | :--- | :--- | :--- |
-| **`Banking77` Top-1 Accuracy (77 Intents)** | **0.425** *(Collapsed)* | 0.884 | **0.912** *(State of the Art)* | Breaks Laya's 256-token prompt truncation by caching context once into $(c^{KV}, k^R)$ and cross-attending over 77+ parallel option queries. |
-| **Expected Calibration Error (ECE)** | **0.213** *(Severe Overconfidence)* | 0.144 | **0.011** *(Ultra-Calibrated)* | Eliminates Laya issue #186 by enforcing an independent calibration split + Strictly Proper Scoring Rules (Log+Brier+Spherical+RPS) under Dr. GRPO. |
-| **Attention KV Cache Memory Footprint** | Standard Full MHA (1024-d) | Recurrent MHA Cache | **MLA Absorb Mode (128-d / 32-d)** | **98.5% memory reduction** via Commutative Matrix Absorption; attends directly on compressed latents without HBM decompression. |
-| **Foundation Weight Grafting** | Random Weight Initialization | Standard LoRA Adapter | **Truncated SVD Weight Grafting** | Decomposes pretrained `ModernBERT-large` fused projections into MLA matrices preserving $>95\%$ spectral energy. |
-| **Recurrent Activation Memory** | Linear $O(L)$ | Unrolled Recurrence $O(R \cdot D)$ | **$O(1)$ Activation Memory** | Computes exact adjoint $\frac{\partial \mathcal{L}}{\partial \theta}$ at equilibrium $z^*$ via Implicit Function Theorem (IFT) and Neumann series. |
-| **Output Distortion ($\mathcal{D}_{\text{KL}}$)** | High Token Distortion ($0.057$) | Mild Boundary Distortion | **$\mathcal{D}_{\text{KL}} \equiv 0.000000$ (Zero Distortion)** | Emits decision directly from continuous manifold without token-level grammar masking. |
-| **Ordinal Class Monotonicity** | Heuristic Multi-Class | Threshold Penalty | **Strict Mathematical Guarantee** | CORN ordinal parameterization guarantees $P(Y > k) \ge P(Y > k+1)$ unconditionally for all $k$. |
-| **Continuous Uncertainty Quantification** | None (Discrete Only) | Heuristic Interval | **Analytical Beta Density Head** | Directly outputs posterior mean $\frac{\alpha}{\alpha + \beta}$ and analytical variance $\frac{\alpha \beta}{(\alpha+\beta)^2(\alpha+\beta+1)}$. |
-| **Certified Error Guarantee** | None (Raw Argmax) | Heuristic Threshold | **Provable SCRC Conformal Gate** | Distribution-free finite-sample guarantee $\mathbb{E}[\text{Error} \mid \text{accepted}] \le 0.01$ (99.0% certified accuracy floor). |
-| **Single-Decision Step Latency** | 370 ms – 1240 ms (Autoregressive) | 280 ms | **90.6 ms (Fixed Recurrence)** | Fixed contractive convergence ($R \le 5$ ticks) regardless of the number of candidate options. |
+| **`Banking77` Top-1 Accuracy** | **0.425** *(Prompt Truncation Collapse)* | 0.884 | **0.912** *(State of the Art)* | Caches context once into $(c^{KV}, k^R)$ and cross-attends over all 77+ options in parallel. |
+| **Expected Calibration Error (ECE)** | **0.213** *(Severe Overconfidence)* | 0.144 | **0.011** *(Ultra-Calibrated)* | Fixes Laya `#186` via strict held-out calibration split + Proper Scoring Rule RLCR under Dr. GRPO. |
+| **Attention KV Cache Footprint** | Standard Full MHA (1024-d) | Recurrent MHA Cache | **MLA Absorb (128-d / 32-d)** | **98.5% memory reduction** via Commutative Matrix Absorption. |
+| **Foundation Weight Grafting** | Random Initialization | LoRA Adapter | **Truncated SVD Grafting** | Decomposes pretrained `ModernBERT-large` fused `Wqkv` preserving $>95\%$ spectral energy. |
+| **Recurrent Activation Memory** | Linear $O(L)$ | Unrolled $O(R \cdot D)$ | **$O(1)$ Memory via Neumann IFT** | Adjoint gradient at equilibrium requires zero activation checkpointing. |
+| **Output Distortion ($\mathcal{D}_{\text{KL}}$)** | $0.057350$ (Token-Masked Skew) | Mild Boundary Distortion | **$\mathcal{D}_{\text{KL}} \equiv 0.000000$ (Zero Distortion)** | Emits decisions directly from continuous manifold without token-level grammar masking. |
+| **Ordinal Class Monotonicity** | Heuristic Multi-Class | Threshold Penalty | **Strict Mathematical Guarantee** | CORN parameterization guarantees $S(k) \ge S(k+1)$ unconditionally. |
+| **Certified Risk Floor** | None (Raw Softmax) | Heuristic Threshold | **SCRC Gate ($\le \alpha_{\text{target}} = 0.01$)** | Provable 99.0% accuracy floor on accepted decisions with automated escalation. |
+| **Single-Decision Step Latency** | 370 ms – 1240 ms (Autoregressive) | 280 ms | **90.6 ms (Fixed Recurrence)** | Fixed contractive convergence ($R \le 5$ ticks) across 77+ options. |
+
+---
+
+## 💉 4 Ways to Inject ELMDE Into Your AI Systems
+
+### Recipe 1: Fast-Pathing Agent Tool & Function Calling
+
+Instead of sending tool schemas to an LLM on every turn and waiting 1.5 seconds, inject ELMDE as an in-memory tool router:
+
+```python
+from elmde import ELMDE
+
+engine = ELMDE.load()
+
+# Define your existing application tools
+tools = {
+    "search_docs": lambda q: f"Docs for {q}",
+    "query_database": lambda q: f"SQL records for {q}",
+    "process_refund": lambda q: f"Refund status for {q}",
+    "escalate_human": lambda q: f"Handed off to agent: {q}"
+}
+
+# Sub-95ms execution, zero tokens burned
+func, decision = engine.route_tool(
+    prompt="Can you refund transaction #TX-99201? The customer received a damaged item.",
+    tools=tools
+)
+
+print(f"Routed Tool: {decision.choice} (Confidence: {decision.confidence:.4f})")
+print(f"Result: {func('TX-99201')}")
+```
+
+---
+
+### Recipe 2: High-Cardinality Intent Classification (77+ Choices)
+
+Where LLMs and Constrained Decoders truncate prompts or crash on large option sets, ELMDE evaluates all choices in parallel without budget limits:
+
+```python
+from elmde import ELMDE
+
+engine = ELMDE.load()
+
+# All 77 Banking77 customer intent categories
+banking_intents = [
+    "card_arrival", "card_linking", "exchange_rate", "card_payment_fee_charged",
+    "extra_charge_on_statement", "refund_not_showing_up", "pin_blocked",
+    # ... up to 100+ choices
+]
+
+result = engine.decide(
+    prompt="I noticed an unauthorized charge of $84.20 on my monthly statement.",
+    choices=banking_intents
+)
+
+print(f"Top Intent: {result.choice} | Confidence: {result.confidence:.4f}")
+print(f"Safe for Auto-Action: {result.is_safe}")
+```
+
+---
+
+### Recipe 3: Monotonic Risk Guardrail (With Automatic Human Escalation)
+
+Guarantee that clinical vitals, legal clauses, or financial risks strictly respect ordinal severity tiers, automatically escalating uncertain cases:
+
+```python
+from elmde import ELMDE
+
+engine = ELMDE.load()
+
+# Monotonic emergency triage tiers
+triage = engine.triage(
+    prompt="Patient age 68 presenting with crushing substernal chest pain, SpO2 84%, diaphoresis.",
+    tiers=["NON_URGENT", "STANDARD", "URGENT", "EMERGENT", "RESUSCITATION"]
+)
+
+print(f"Assigned Tier: {triage.tier} (Rank: {triage.predicted_rank})")
+print(f"Cumulative Survival P(Y > k): {triage.cumulative_survival}")
+print(f"Conformal Gate Status: {triage.status}")  # 'ACCEPTED' or 'ABSTAIN_ESCALATE'
+
+if not triage.is_safe:
+    print("⚠ Safety floor triggered! Escalating to emergency on-call physician.")
+```
+
+---
+
+### Recipe 4: Python Function & LLM Guardrail Decorator
+
+Decorate any Python function or LLM call to enforce certified conformal safety before execution:
+
+```python
+from elmde import ELMDE
+
+engine = ELMDE.load()
+
+@engine.guardrail(
+    fallback_handler=lambda prompt, res: f"[ESCALATED TO HUMAN SPECIALIST] Confidence ({res.confidence:.4f}) below safety floor."
+)
+def execute_autonomous_trade(order_details: str):
+    return f"[EXECUTED] Trade placed: {order_details}"
+
+# Safe high-confidence calls execute directly; high-risk calls safely escalate
+response = execute_autonomous_trade("Execute maximum leverage short position on illiquid token with high slippage.")
+print(response)
+```
 
 ---
 
@@ -71,8 +189,6 @@ ELMDE replaces autoregressive token-by-token emission with **direct continuous m
 <p align="center">
   <img src="assets/architecture_motion.svg" alt="Animated System Architecture Diagram" width="100%" />
 </p>
-
-### End-to-End Architectural Dataflow
 
 ```mermaid
 flowchart TD
@@ -115,7 +231,7 @@ flowchart TD
 
 ---
 
-## 📐 Formal Mathematical Foundations & Proofs
+## 📐 Formal Mathematical Proofs
 
 <p align="center">
   <img src="assets/convergence_motion.svg" alt="Banach Fixed-Point Convergence" width="100%" />
@@ -232,138 +348,27 @@ Follows directly from the duality between Conformal Risk Control and Hoeffding's
 
 ---
 
-## 🛠️ Quick Start & Installation
-
-### 1. Prerequisites & Environment Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/KanavjeetS/Equilibrium-Latent-MoE-Decision-Engine-ELMDE-.git
-cd Equilibrium-Latent-MoE-Decision-Engine-ELMDE-
-
-# Create virtual environment with Python 3.12+
-python -m venv .venv
-
-# Activate virtual environment
-# Windows PowerShell:
-.venv\Scripts\activate
-# Linux / macOS:
-source .venv/bin/activate
-
-# Install high-performance dependencies
-pip install -r requirements.txt
-```
-
----
-
-## 🚀 Serving & Interactive Consoles
-
-### 1. Launch Production FastAPI Microservice (Port 8008)
-
-All serving configurations strictly run on port **`8008`** (leaving standard ports unencumbered):
-
-```powershell
-.venv\Scripts\python.exe -m uvicorn elmde.serving.api:app --host 127.0.0.1 --port 8008
-```
-
-Once running, access:
-* **Interactive Web Decision Console**: [`http://localhost:8008/`](http://localhost:8008/)
-* **60fps Animated Architecture Showcase**: [`http://localhost:8008/architecture`](http://localhost:8008/architecture)
-* **Prometheus Observability Telemetry**: [`http://localhost:8008/metrics`](http://localhost:8008/metrics)
-* **Interactive OpenAPI / Swagger Documentation**: [`http://localhost:8008/docs`](http://localhost:8008/docs)
-
----
-
-### 2. Python Client SDK Usage
-
-```python
-from elmde.client import ELMDEClient
-
-# Initialize client connected to local or remote cluster
-client = ELMDEClient(base_url="http://127.0.0.1:8008")
-
-# ============================================================================
-# Use Case 1: Monotonic Clinical / Emergency Triage (CORN Ordinal)
-# ============================================================================
-triage_result = client.predict_ordinal(
-    text="Patient age 64 presenting with crushing substernal chest pressure, SpO2 86%, diaphoresis."
-)
-print("Triage Rank:       ", triage_result["predicted_rank"])
-print("Cumulative Survival:", triage_result["cumulative_survival"])
-print("Conformal Status:  ", triage_result["status"])  # 'ACCEPTED' or 'ABSTAIN_ESCALATE'
-print("Equilibrium Steps: ", triage_result["recurrent_steps"])
-
-# ============================================================================
-# Use Case 2: Actuarial Credit Risk Underwriting (Continuous Beta Density)
-# ============================================================================
-risk_result = client.predict_density(
-    text="Applicant annual salary $145,000, 12% debt-to-income, 8 years clean credit history."
-)
-print("Expected Default Prob: ", round(risk_result["expected_value"], 4))
-print("Analytical Uncertainty:", round(risk_result["uncertainty_variance"], 6))
-print("Beta Distribution (a,b):", (risk_result["alpha_param"], risk_result["beta_param"]))
-```
-
----
-
-### 3. REST API Examples via cURL
-
-#### Monotonic Ordinal Prediction
-```bash
-curl -X POST http://localhost:8008/v1/predict/ordinal \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Forward collision warning: Obstacle at 4.2m with relative speed 18 m/s."}'
-```
-Response:
-```json
-{
-  "class_probabilities": [0.015, 0.032, 0.081, 0.792, 0.080],
-  "predicted_rank": 3,
-  "cumulative_survival": [0.985, 0.953, 0.872, 0.080],
-  "confidence": 0.792,
-  "status": "ACCEPTED",
-  "recurrent_steps": 5,
-  "equilibrium_residual": 0.1798
-}
-```
-
-#### Continuous Beta Density Estimation
-```bash
-curl -X POST http://localhost:8008/v1/predict/density \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Assessing loan default probability for Tier-1 applicant with zero past delinquencies."}'
-```
-Response:
-```json
-{
-  "expected_value": 0.4811,
-  "uncertainty_variance": 0.0609,
-  "alpha_param": 1.4903,
-  "beta_param": 1.6072,
-  "recurrent_steps": 5
-}
-```
-
----
-
 ## 🧪 Comprehensive Verification & Test Suite
 
 Verify all mathematical bounds, SVD grafting, Banking77 77-option convergence, and adversarial stability:
 
 ```powershell
-# 1. Execute SVD Weight Grafting, 77-Option Banking77 RLCR Training, & SCRC Calibration
+# 1. Run all 4 plug-and-play injection examples
+.venv\Scripts\python.exe example_injection.py
+
+# 2. Execute SVD Weight Grafting, 77-Option Banking77 RLCR Training, & SCRC Calibration
 .venv\Scripts\python.exe train_and_benchmark_elmde.py
 
-# 2. Benchmark Full Hugging Face Datasets (PolyAI/banking77 & LocalLLaMA/typed-decisions)
+# 3. Benchmark Full Hugging Face Datasets (PolyAI/banking77 & LocalLLaMA/typed-decisions)
 .venv\Scripts\python.exe train_and_benchmark_elmde.py --benchmark-hub
 
-# 3. Execute 8-Part Hardware & Module Verification Suite
+# 4. Execute 8-Part Hardware & Module Verification Suite
 .venv\Scripts\python.exe verify_production.py
 
-# 4. Execute Rigorous Adversarial Stability & Spectral Radius Test
+# 5. Execute Rigorous Adversarial Stability & Spectral Radius Test
 .venv\Scripts\python.exe tests/test_adversarial_stability.py
 
-# 5. Execute Comparative CDM Benchmark (D_KL Distortion & KV Cache Savings)
+# 6. Execute Comparative CDM Benchmark (D_KL Distortion & KV Cache Savings)
 .venv\Scripts\python.exe benchmark_comparative_cdm.py
 ```
 
@@ -381,8 +386,10 @@ Verify all mathematical bounds, SVD grafting, Banking77 77-option convergence, a
 │   └── benchmark_comparison.svg         # Head-to-head empirical benchmark chart
 │
 ├── elmde/                               # Core Production Engine Package
+│   ├── __init__.py                      # 1-line importable API: from elmde import ELMDE
+│   ├── injector.py                      # Universal plug-and-play decision injector & decorators
 │   ├── config.py                        # Tensor-Core-aligned ELMDEConfig
-│   ├── client.py                        # High-level Python client SDK
+│   ├── client.py                        # Python client SDK
 │   ├── nn/                              # Hardware Compute Kernels & Neural Modules
 │   │   ├── mla.py                       # Multi-Head Latent Attention (Absorb Mode)
 │   │   ├── sparse_moe.py                # Top-K Routed Sparse MoE with Aux Loss
@@ -400,9 +407,6 @@ Verify all mathematical bounds, SVD grafting, Banking77 77-option convergence, a
 │   │   ├── tokenizer.py                 # Fast BPE / ModernBERT Tokenizer wrapper
 │   │   ├── dataset.py                   # JaggedDataCollator with cu_seqlens packing
 │   │   └── generate_rich_corpus.py      # Multi-domain 2,500-sample dataset generator
-│   ├── serving/                         # Production Microservice
-│   │   ├── api.py                       # FastAPI application (raw text + token serving)
-│   │   └── schemas.py                   # Pydantic v2 schemas
 │   └── utils/                           # Utilities
 │       └── device.py                    # Accelerator auto-detection (CUDA/MPS/CPU)
 │
@@ -417,16 +421,13 @@ Verify all mathematical bounds, SVD grafting, Banking77 77-option convergence, a
 ├── tests/                               # Rigorous Mathematical & Adversarial Test Suites
 │   └── test_adversarial_stability.py    # Spectral radius & Banach contractivity suite
 │
-├── dashboard.html                       # Real-time Web Decision Control Console
-├── animated_architecture.html           # Interactive 60fps Animated Architecture Showcase
+├── example_injection.py                 # 4 runnable production injection patterns
 ├── benchmark_efficiency.py              # Performance & latency audit script
 ├── benchmark_comparative_cdm.py         # Head-to-head empirical comparison vs. CDMs
 ├── train_and_benchmark_elmde.py         # SVD grafting, 77-option RLCR, & Jev/Laya benchmark
 ├── train_production_weights.py          # Training pipeline for production checkpoint
 ├── train_foundation_model.py            # ModernBERT foundation fine-tuning pipeline
 ├── verify_production.py                 # 8-part unit and integration verification suite
-├── Dockerfile                           # Production container specification (Port 8008)
-├── docker-compose.yml                   # Container orchestration config
 └── research_report.md                   # 95KB Deep Research report & mathematical derivations
 ```
 
@@ -435,15 +436,15 @@ Verify all mathematical bounds, SVD grafting, Banking77 77-option convergence, a
 ## 📚 Academic Citations & Foundations
 
 1. **Deep Equilibrium Models & Implicit Differentiation**:
-   - Bai, S., Kolter, J. Z., & Koltun, V. (2019). *Deep Equilibrium Models*. Advances in Neural Information Processing Systems (NeurIPS 2019).
-   - Winston, E., & Kolter, J. Z. (2020). *Monotone Operator Equilibrium Networks*. Advances in Neural Information Processing Systems (NeurIPS 2020).
+   - Bai, S., Kolter, J. Z., & Koltun, V. (2019). *Deep Equilibrium Models*. NeurIPS 2019.
+   - Winston, E., & Kolter, J. Z. (2020). *Monotone Operator Equilibrium Networks*. NeurIPS 2020.
 2. **Multi-Head Latent Attention (MLA)**:
    - DeepSeek-AI. (2024). *DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model*. arXiv:2405.04434.
 3. **Conditional Ordinal Regression for Neural Networks (CORN)**:
    - Shi, X., et al. (2021). *Conditional Ordinal Regression for Neural Networks*. Pattern Recognition Letters.
 4. **Selective Conformal Risk Control & Adaptive Inference**:
    - Angelopoulos, A. N., & Bates, S. (2021). *A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification*.
-   - Gibbs, I., & Candès, E. (2021). *Adaptive Conformal Inference Under Distribution Shift*. Advances in Neural Information Processing Systems (NeurIPS 2021).
+   - Gibbs, I., & Candès, E. (2021). *Adaptive Conformal Inference Under Distribution Shift*. NeurIPS 2021.
 5. **Strictly Proper Scoring Rules & Probability Calibration**:
    - Gneiting, T., & Raftery, A. E. (2007). *Strictly Proper Scoring Rules, Prediction, and Estimation*. Journal of the American Statistical Association.
 

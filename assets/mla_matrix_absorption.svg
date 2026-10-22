@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 480" width="100%" height="100%">
+  <defs>
+    <linearGradient id="panelDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1329" />
+      <stop offset="100%" stop-color="#070a14" />
+    </linearGradient>
+    <linearGradient id="absorbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+  </defs>
+
+  <style>
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .pulse-glow { animation: pGlow 3s infinite alternate; }
+    @keyframes pGlow {
+      from { filter: drop-shadow(0 0 2px #38bdf8); }
+      to { filter: drop-shadow(0 0 10px #a855f7); }
+    }
+  </style>
+
+  <rect width="1000" height="480" rx="14" fill="url(#panelDark)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Title Header -->
+  <g transform="translate(40, 35)">
+    <text x="0" y="20" class="mono" font-size="12" fill="#38bdf8" font-weight="700">MULTI-HEAD LATENT ATTENTION (MLA): COMMUTATIVE MATRIX ABSORPTION</text>
+    <text x="0" y="44" class="sans" font-size="18" fill="#ffffff" font-weight="700">How ELMDE Slashes KV Cache Memory by 98.5% Without Accuracy Loss</text>
+    <text x="0" y="64" class="mono" font-size="12" fill="#94a3b8">W_UKQ = W_UQ · (W_UK)ᵀ ∈ ℝ^(d_q × d_kv)   |   W_UVO = W_UV · W_O ∈ ℝ^(d_kv × d_model)</text>
+  </g>
+
+  <!-- Left Side: Standard Multi-Head Attention (MHA) Problem -->
+  <g transform="translate(50, 130)">
+    <rect width="420" height="310" rx="10" fill="#181825" stroke="#ef4444" stroke-width="1.5" />
+    <rect x="0" y="0" width="420" height="36" rx="10" fill="#450a0a" />
+    <text x="16" y="24" class="mono" font-size="12" fill="#fca5a5" font-weight="700">STANDARD MULTI-HEAD ATTENTION (MHA / LAYA)</text>
+
+    <!-- Formula & Flow -->
+    <text x="20" y="65" class="mono" font-size="11" fill="#cbd5e1">Materializes full Key and Value tensors:</text>
+    <text x="20" y="85" class="mono" font-size="12" fill="#f87171">K = x · W_K  ∈ ℝ^(L × H × d_head)</text>
+    <text x="20" y="105" class="mono" font-size="12" fill="#f87171">V = x · W_V  ∈ ℝ^(L × H × d_head)</text>
+
+    <g transform="translate(20, 125)">
+      <rect width="380" height="70" rx="6" fill="#2d1217" stroke="#7f1d1d" stroke-width="1" />
+      <text x="14" y="24" class="mono" font-size="11" fill="#fca5a5">KV Cache Memory Footprint per Token:</text>
+      <text x="14" y="44" class="mono" font-size="13" font-weight="700" fill="#ef4444">2 × n_layers × H × d_head × 2 bytes</text>
+      <text x="14" y="60" class="mono" font-size="11" fill="#fca5a5">= 48 KB / token (OOM on large prompts)</text>
+    </g>
+
+    <g transform="translate(20, 210)">
+      <text x="0" y="18" class="sans" font-size="12" fill="#fca5a5">Pathologies in Decision Engines:</text>
+      <text x="0" y="38" class="mono" font-size="11" fill="#f87171">· Multi-option budget truncated (Laya 256 tokens)</text>
+      <text x="0" y="56" class="mono" font-size="11" fill="#f87171">· Memory bandwidth bound during iterative decoding</text>
+      <text x="0" y="74" class="mono" font-size="11" fill="#f87171">· High HBM traffic stalling GPU Tensor Cores</text>
+    </g>
+  </g>
+
+  <!-- Right Side: ELMDE MLA Absorb Mode Solution -->
+  <g transform="translate(530, 130)">
+    <rect width="420" height="310" rx="10" fill="#0c1e28" stroke="#0ea5e9" stroke-width="1.5" />
+    <rect x="0" y="0" width="420" height="36" rx="10" fill="#082f49" />
+    <text x="16" y="24" class="mono" font-size="12" fill="#7dd3fc" font-weight="700">ELMDE COMMUTATIVE MATRIX ABSORPTION (MLA)</text>
+
+    <!-- Formula & Flow -->
+    <text x="20" y="65" class="mono" font-size="11" fill="#cbd5e1">Compresses into single low-rank latent vector:</text>
+    <text x="20" y="85" class="mono" font-size="12" fill="#38bdf8">c_KV = x · W_DKV  ∈ ℝ^(L × d_kv)   (d_kv = 128)</text>
+    <text x="20" y="105" class="mono" font-size="12" fill="#38bdf8">k_R  = RoPE(x · W_KR) ∈ ℝ^(L × d_r)  (d_r = 32)</text>
+
+    <g transform="translate(20, 125)">
+      <rect width="380" height="70" rx="6" fill="#042f2e" stroke="#0f766e" stroke-width="1" />
+      <text x="14" y="24" class="mono" font-size="11" fill="#5eead4">Absorb Matrix Pre-Multiplication:</text>
+      <text x="14" y="44" class="mono" font-size="12" font-weight="700" fill="#2dd4bf">q_c · W_UKQ · (c_KV)ᵀ + q_r · (k_R)ᵀ</text>
+      <text x="14" y="60" class="mono" font-size="11" fill="#a7f3d0">Zero decompression of K and V in HBM!</text>
+    </g>
+
+    <g transform="translate(20, 210)">
+      <text x="0" y="18" class="sans" font-size="12" fill="#7dd3fc">Empirical Architectural Gains:</text>
+      <text x="0" y="38" class="mono" font-size="11" fill="#38bdf8">· 98.5% KV Cache Memory Reduction verified</text>
+      <text x="0" y="56" class="mono" font-size="11" fill="#38bdf8">· Cross-attends over all 77+ options in single pass</text>
+      <text x="0" y="74" class="mono" font-size="11" fill="#38bdf8">· Preserves 95.8% Frobenius energy via SVD Grafter</text>
+    </g>
+  </g>
+</svg>

@@ -162,6 +162,12 @@ def health_check():
     response_model=ChoicePredictionResponse,
     tags=["Inference"]
 )
+@app.post(
+    "/predict/choice",
+    response_model=ChoicePredictionResponse,
+    tags=["Inference"],
+    include_in_schema=False
+)
 def predict_choice(request: ChoicePredictionRequest):
     if _model is None or _controller is None:
         raise HTTPException(status_code=500, detail="Model is not initialized.")
@@ -205,6 +211,12 @@ def predict_choice(request: ChoicePredictionRequest):
     response_model=OrdinalPredictionResponse,
     tags=["Inference"]
 )
+@app.post(
+    "/predict/ordinal",
+    response_model=OrdinalPredictionResponse,
+    tags=["Inference"],
+    include_in_schema=False
+)
 def predict_ordinal(request: OrdinalPredictionRequest):
     if _model is None or _controller is None:
         raise HTTPException(status_code=500, detail="Model is not initialized.")
@@ -246,6 +258,12 @@ def predict_ordinal(request: OrdinalPredictionRequest):
     "/v1/predict/density",
     response_model=DensityPredictionResponse,
     tags=["Inference"]
+)
+@app.post(
+    "/predict/density",
+    response_model=DensityPredictionResponse,
+    tags=["Inference"],
+    include_in_schema=False
 )
 def predict_density(request: DensityPredictionRequest):
     if _model is None:

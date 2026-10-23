@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ELMDE — 60fps Cinema Studio & Motion Graphics Player</title>
+  <style>
+    :root {
+      --bg: #03050a;
+      --card-bg: rgba(13, 20, 35, 0.88);
+      --cyan: #00f2fe;
+      --blue: #3b82f6;
+      --violet: #8b5cf6;
+      --emerald: #10b981;
+      --rose: #ef4444;
+      --amber: #f59e0b;
+      --border: rgba(56, 189, 248, 0.25);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px;
+      overflow-x: hidden;
+    }
+    .studio-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+    button {
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s ease, opacity 0.1s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover { transform: translateY(-1px); opacity: 0.95; }
+    button:active { transform: translateY(0); }
+    button.record-btn { background: linear-gradient(135deg, #e11d48, #f97316); }
+    .status-pill {
+      font-size: 12px;
+      color: #94a3b8;
+      font-family: monospace;
+      padding: 2px 8px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .canvas-wrap {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      max-width: 95vw;
+      aspect-ratio: 16 / 9;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 242, 254, 0.12);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: #000;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .error-console {
+      margin-top: 10px;
+      width: 1000px;
+      max-width: 95vw;
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      border-radius: 8px;
+      padding: 10px;
+      color: #f43f5e;
+      font-family: monospace;
+      font-size: 12px;
+      display: none;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="studio-bar">
+    <button id="playBtn">▶ PLAY MOTION GRAPHICS + AUDIO</button>
+    <button id="recordBtn" class="record-btn">⏺ RECORD & DOWNLOAD WebM VIDEO</button>
+    <span class="status-pill" id="statusText">System Ready • Canvas Armed</span>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="stage" width="1280" height="720"></canvas>
+  </div>
+
+  <div class="error-console" id="errLog"></div>
+
+<script>
+// ============================================================================
+// GLOBAL ERROR CAPTURE & SAFE UTILITIES
+// ============================================================================
+const errLog = document.getElementById('errLog');
+function reportError(msg, err) {
+  console.error(msg, err);
+  errLog.style.display = 'block';
+  errLog.innerHTML += `[ERROR] ${msg}: ${err ? err.stack || err.message || err : ''}\n`;
+}
+
+// Fallback RoundRect for older/restricted rendering engines (prevents script crash)
+function drawSafeRoundRect(ctx, x, y, w, h, r, fill, stroke, lineW = 2) {
+  try {
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(x, y, w, h, r);
+    } else {
+      // Manual Path Polyfill
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineW; ctx.stroke(); }
+  } catch (e) {
+    reportError('drawSafeRoundRect failed', e);
+  }
+}
+
+// ============================================================================
+// CINEMA STAGE & RENDER ENGINE
+// ============================================================================
+let canvas, ctx, playBtn, recordBtn, statusText;
+try {
+  canvas = document.getElementById('stage');
+  ctx = canvas.getContext('2d');
+  playBtn = document.getElementById('playBtn');
+  recordBtn = document.getElementById('recordBtn');
+  statusText = document.getElementById('statusText');
+} catch (e) {
+  reportError('Initialization of canvas elements failed', e);
+}
+
+const DURATION = 30.0;
+let startTime = null;
+let isPlaying = false;
+let animFrame = null;
+let audioCtx = null;
+const triggeredCues = new Set();
+
+// Fallback interactive star/cyber particles
+const particles = [];
+for (let i = 0; i < 60; i++) {
+  particles.push({
+    x: Math.random() * 1280,
+    y: Math.random() * 720,
+    vx: (Math.random() - 0.5) * 0.7,
+    vy: (Math.random() - 0.5) * 0.5,
+    r: Math.random() * 2 + 1
+  });
+}
+
+// ============================================================================
+// SOUND SYNTHESIS engine (Zero dependencies, pure WebAudio)
+// ============================================================================
+function initAudio() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {
+    reportError('Audio initialization failed. Using silent mode.', e);
+  }
+}
+
+function playSubDrop(freqStart = 110, duration = 1.2) {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freqStart, now);
+    osc.frequency.exponentialRampToValueAtTime(28, now + duration);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) { console.warn('SubDrop synth error', e); }
+}
+
+function playDataPulse(freq = 520, duration = 0.08) {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.3, now + duration);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) { }
+}
+
+function playChordChime() {
+  if (!audioCtx) return;
+  try {
+    const now = audioCtx.currentTime;
+    const freqs = [523.25, 659.25, 783.99, 1046.5];
+    freqs.forEach((f, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, now + idx * 0.04);
+      gain.gain.setValueAtTime(0.08, now + idx * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 1.2);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now + idx * 0.04);
+      osc.stop(now + idx * 0.04 + 1.4);
+    });
+  } catch (e) { }
+}
+
+function triggerOnce(key, fn) {
+  if (!triggeredCues.has(key)) {
+    triggeredCues.add(key);
+    try { fn(); } catch (e) { reportError(`Trigger error on ${key}`, e); }
+  }
+}
+
+// ============================================================================
+// DRAWING SCENES
+// ============================================================================
+function drawBackground(t) {
+  try {
+    const grad = ctx.createRadialGradient(640, 360, 50, 640, 360, 750);
+    grad.addColorStop(0, '#0a0d1a');
+    grad.addColorStop(1, '#020307');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1280, 720);
+
+    // Subtle Grid
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.05)';
+    ctx.lineWidth = 1;
+    const offset = (t * 20) % 50;
+    for (let x = 0; x < 1280; x += 50) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 720); ctx.stroke();
+    }
+    for (let y = offset; y < 720; y += 50) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1280, y); ctx.stroke();
+    }
+
+    // Space Particles
+    ctx.fillStyle = 'rgba(0, 242, 254, 0.3)';
+    particles.forEach(p => {
+      const px = (p.x + p.vx * t * 40 + 1280) % 1280;
+      const py = (p.y + p.vy * t * 40 + 720) % 720;
+      ctx.beginPath();
+      ctx.arc(px, py, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  } catch (e) { reportError('Error drawing bg', e); }
+}
+
+function drawBadge(text, x, y, color = '#00f2fe') {
+  ctx.font = 'bold 12px sans-serif';
+  const w = ctx.measureText(text).width + 24;
+  drawSafeRoundRect(ctx, x - w / 2, y - 16, w, 32, 16, 'rgba(11, 15, 27, 0.9)', color, 1);
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y + 4);
+}
+
+// S1: The Problem
+function renderScene1(t) {
+  triggerOnce('s1_drop', () => playSubDrop(120, 1.2));
+  drawBadge('SCENE 01 • THE AUTOREGRESSIVE & FIRST-GEN BOTTLENECK', 640, 56, '#ef4444');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 42px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Why Wait 850ms for Token-by-Token Routing?', 640, 125);
+
+  // Left card
+  drawSafeRoundRect(ctx, 80, 175, 520, 440, 18, 'rgba(15, 23, 42, 0.85)', 'rgba(239, 68, 68, 0.4)', 2);
+  ctx.fillStyle = '#ef4444';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('Autoregressive LLM + Constrained Decoding', 340, 220);
+
+  const tokens = ['{"', 'intent', '":', ' "', 'billing', '"}'];
+  const activeTok = Math.min(tokens.length, Math.floor((t / 4.5) * tokens.length) + 1);
+  for (let i = 0; i < activeTok; i++) {
+    triggerOnce('tok_' + i, () => playDataPulse(220 + i * 40, 0.08));
+    drawSafeRoundRect(ctx, 115 + i * 76, 260, 66, 42, 6, 'rgba(239, 68, 68, 0.15)', '#ef4444', 1);
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '600 15px monospace';
+    ctx.fillText(tokens[i], 148 + i * 76, 286);
+  }
+
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '500 17px sans-serif';
+  ctx.fillText('• Myopic Greedy Masking Distorts Model Intent', 340, 360);
+  ctx.fillText('• Stepwise KL Projection Tax: log(1 / α(h_t)) > 0', 340, 400);
+  ctx.fillStyle = '#ef4444';
+  ctx.font = '800 28px sans-serif';
+  ctx.fillText('11,500 ms (50 Questions)', 340, 510);
+
+  // Right card
+  drawSafeRoundRect(ctx, 680, 175, 520, 440, 18, 'rgba(15, 23, 42, 0.85)', 'rgba(245, 158, 11, 0.4)', 2);
+  ctx.fillStyle = '#f59e0b';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('1st-Gen System 1 (Laya & Cloud Jev)', 940, 220);
+
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '500 17px sans-serif';
+  ctx.fillText('• Laya Re-Encodes Full State Q Times (771ms @ 50Q)', 940, 305);
+  ctx.fillText('• 192-Token Header Wall: 42.5% on Banking77 (77 opts)', 940, 350);
+  ctx.fillText('• Jev Closed Cloud API: 245ms–490ms Network Latency', 940, 395);
+  ctx.fillText('• Uncertified Thresholds (0.144 – 0.213 ECE)', 940, 440);
+
+  ctx.fillStyle = '#f59e0b';
+  ctx.font = '800 28px sans-serif';
+  ctx.fillText('Bottlenecked on Scale & Latency', 940, 510);
+}
+
+// S2: ELMDE introduces MLA
+function renderScene2(t) {
+  const localT = t - 6.0;
+  triggerOnce('s2_drop', () => { playSubDrop(150, 1.3); playChordChime(); });
+
+  drawBadge('SCENE 02 • ENTER ELMDE: EQUILIBRIUM LATENT-MoE DECISION ENGINE', 640, 56, '#00f2fe');
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 40px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Encode-Once MLA in Commutative Absorb Mode', 640, 120);
+
+  // Unpadded Box
+  drawSafeRoundRect(ctx, 90, 215, 290, 310, 16, 'rgba(15, 23, 42, 0.9)', '#38bdf8', 2);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('Unpadded Jagged Stream', 235, 255);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '500 14px monospace';
+  ctx.fillText('X_unpad + cu_seqlens', 235, 285);
+  ctx.fillText('Zero [PAD] Compute Waste', 235, 325);
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText('2.65× – 3× Faster Prefill', 235, 445);
+
+  // Visual lasers to model
+  for (let i = 0; i < 5; i++) {
+    const prog = ((localT * 1.5) + i * 0.2) % 1.0;
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath(); ctx.arc(380 + prog * 160, 280 + i * 35, 5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // MLA Center Cache Card
+  drawSafeRoundRect(ctx, 540, 200, 310, 340, 18, 'rgba(16, 185, 129, 0.12)', '#10b981', 2.5);
+  ctx.fillStyle = '#10b981';
+  ctx.font = '800 21px sans-serif';
+  ctx.fillText('MLA Latent Cache M_KV', 695, 245);
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '600 15px monospace';
+  ctx.fillText('(c_t^{KV}, k_t^R) • Decoupled RoPE', 695, 285);
+  ctx.fillText('W_UKQ = W_UQ (W_UK)^T', 695, 320);
+  ctx.fillText('W_UVO = W_UV W_O', 695, 350);
+
+  ctx.fillStyle = '#00f2fe';
+  ctx.font = '900 40px sans-serif';
+  ctx.fillText('-92.97% KV Cache', 695, 420);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '600 14px monospace';
+  ctx.fillText('Max Error: 5.68 × 10⁻¹⁴ (Exact)', 695, 470);
+
+  // SVD card
+  drawSafeRoundRect(ctx, 920, 215, 280, 310, 16, 'rgba(168, 85, 247, 0.12)', '#a855f7', 2);
+  ctx.fillStyle = '#c084fc';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.fillText('Truncated SVD Grafting', 1060, 260);
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '500 15px sans-serif';
+  ctx.fillText('Grafts ModernBERT-large', 1060, 310);
+  ctx.fillText('W_qkv → MLA Subspaces', 1060, 340);
+  ctx.fillText('in 10 Seconds on 1 GPU', 1060, 370);
+  ctx.fillStyle = '#a855f7';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText('>95% Spectral Energy', 1060, 440);
+}
+
+// S3: Looped Latent-MoE
+function renderScene3(t) {
+  const localT = t - 13.0;
+  triggerOnce('s3_drop', () => playSubDrop(95, 1.0));
+
+  drawBadge('SCENE 03 • SYSTEM 1.5: CONTRACTIVE LOOPED LATENT-MoE & TRI-MODAL HEADS', 640, 56, '#a855f7');
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Iterative Latent Equilibrium z* + Zero-Distortion Manifold Heads', 640, 120);
+
+  // MOE Loop circle
+  const cx = 320, cy = 390, radius = 130;
+  ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+
+  const tick = Math.min(4, Math.floor(localT * 1.15) + 1);
+  triggerOnce('moe_tick_' + tick, () => playDataPulse(360 + tick * 80, 0.1));
+
+  for (let e = 0; e < 8; e++) {
+    const ang = (e / 8) * Math.PI * 2 + localT * 1.0;
+    const isActive = (e % 2 === tick % 2);
+    ctx.fillStyle = isActive ? '#00f2fe' : '#334155';
+    ctx.beginPath(); ctx.arc(cx + Math.cos(ang) * radius, cy + Math.sin(ang) * radius, isActive ? 14 : 9, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText(`LatentMoE Tick r = ${tick}`, cx, cy - 15);
+  ctx.fillStyle = '#10b981';
+  ctx.font = '600 14px monospace';
+  ctx.fillText(`||z^(r+1) - z^(r)|| = ${(0.25 * Math.pow(0.25, tick)).toFixed(5)}`, cx, cy + 18);
+  ctx.fillStyle = '#c084fc';
+  ctx.fillText('O(1) Memory Neumann VJP IFT', cx, cy + 45);
+
+  // S3 Subcards
+  const subcards = [
+    { label: '1. Global Choice Head (Unbounded K Options)', spec: 'Heteroscedastic τ(z*) • 77+ Banking77 Labels • D_KL = 0', y: 195, c: '#00f2fe' },
+    { label: '2. CORN Rank-Consistent Ordinal Score Head', spec: 'P(Y > k) = ∏ σ(η_j) • Strictly Monotonic • RPS Trained', y: 330, c: '#10b981' },
+    { label: '3. Continuous Beta(α, β) Noul Density + SCRC Gate', spec: 'Closed-Form Epistemic Variance • 99.45% Certified Accuracy', y: 465, c: '#f59e0b' }
+  ];
+  subcards.forEach(sc => {
+    drawSafeRoundRect(ctx, 580, sc.y, 620, 110, 16, 'rgba(15, 23, 42, 0.88)', sc.c, 1.5);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = sc.c;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(sc.label, 605, sc.y + 40);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '500 15px sans-serif';
+    ctx.fillText(sc.spec, 605, sc.y + 75);
+  });
+}
+
+// S4: Metrics & OS Release
+function renderScene4(t) {
+  const localT = t - 20.0;
+  triggerOnce('s4_finale', () => { playSubDrop(120, 1.6); playChordChime(); });
+
+  drawBadge('SCENE 04 • VERIFIED BENCHMARKS & OPEN-SOURCE RELEASE', 640, 52, '#10b981');
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Outperforming Jev, Laya & Autoregressive CDMs', 640, 105);
+
+  const scaleFact = Math.min(1.0, localT / 2.0);
+
+  // Left card: latency
+  drawSafeRoundRect(ctx, 70, 140, 550, 365, 16, 'rgba(15, 23, 42, 0.88)', 'rgba(56, 189, 248, 0.3)', 1.5);
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 19px sans-serif';
+  ctx.fillText('50-Question Batch Latency (Lower is Better)', 345, 180);
+
+  const barData = [
+    { label: 'Autoregressive LLM', val: '11,500 ms', w: 410 * scaleFact, col: '#ef4444', y: 220 },
+    { label: 'Convai Laya (T4)', val: '771 ms', w: 260 * scaleFact, col: '#f59e0b', y: 285 },
+    { label: 'TypeSafe Jev API', val: '490 ms', w: 190 * scaleFact, col: '#a855f7', y: 350 },
+    { label: 'ELMDE (Ours)', val: '14 ms (55× Faster)', w: Math.max(25, 32 * scaleFact), col: '#10b981', y: 415 }
+  ];
+  barData.forEach(bd => {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 15px sans-serif';
+    ctx.fillText(bd.label, 95, bd.y);
+    drawSafeRoundRect(ctx, 95, bd.y + 10, bd.w, 24, 5, bd.col, null);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(bd.val, 105 + bd.w, bd.y + 27);
+  });
+
+  // Right card: metrics
+  drawSafeRoundRect(ctx, 660, 140, 550, 365, 16, 'rgba(15, 23, 42, 0.88)', 'rgba(16, 185, 129, 0.35)', 1.5);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 19px sans-serif';
+  ctx.fillText('Calibration & High-Cardinality Scorecard', 935, 180);
+
+  const metrics = [
+    ['SCRC Certified Test Accuracy', '99.45% (α = 0.01)'],
+    ['Dr. GRPO Proper Scoring ECE', '0.0434 (-60.5% Error)'],
+    ['KV Cache Memory Footprint', '-92.97% (MLA Absorb)'],
+    ['Banking77 (77 Choice Intents)', 'Zero Token Truncation']
+  ];
+  metrics.forEach((m, idx) => {
+    const my = 225 + idx * 64;
+    drawSafeRoundRect(ctx, 690, my - 24, 490, 48, 8, 'rgba(30, 41, 59, 0.85)', 'rgba(148, 163, 184, 0.15)', 1);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(m[0], 710, my + 6);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#00f2fe';
+    ctx.font = 'bold 17px monospace';
+    ctx.fillText(m[1], 1160, my + 6);
+  });
+
+  // Footer / Banner
+  drawSafeRoundRect(ctx, 70, 530, 1140, 140, 16, 'rgba(2, 132, 199, 0.15)', '#00f2fe', 2.5);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '800 24px sans-serif';
+  ctx.fillText('100% OPEN SOURCE • CREATED BY KANAV JEET SINGH', 640, 575);
+  ctx.fillStyle = '#00f2fe';
+  ctx.font = 'bold 21px monospace';
+  ctx.fillText('github.com/KanavjeetS/Equilibrium-Latent-MoE-Decision-Engine-ELMDE-', 640, 615);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '500 14px sans-serif';
+  ctx.fillText('PyTorch + Pure NumPy Math Engine • SVD ModernBERT Grafter • Proper RLCR Trainer', 640, 645);
+}
+
+// ============================================================================
+// ANIMATION LOOP & EXPORT WRAPPER
+// ============================================================================
+function runLoop(timestamp) {
+  if (!startTime) startTime = timestamp;
+  const elapsed = (timestamp - startTime) / 1000.0;
+
+  try {
+    drawBackground(elapsed);
+
+    if (elapsed < 6.0) {
+      renderScene1(elapsed);
+    } else if (elapsed < 13.0) {
+      renderScene2(elapsed);
+    } else if (elapsed < 20.0) {
+      renderScene3(elapsed);
+    } else if (elapsed <= DURATION) {
+      renderScene4(elapsed);
+    } else {
+      isPlaying = false;
+      statusText.textContent = 'Demo Complete. Click Play to view again.';
+      return;
+    }
+
+    // Timeline loading bar
+    ctx.fillStyle = '#00f2fe';
+    ctx.fillRect(0, 715, (elapsed / DURATION) * 1280, 5);
+
+    if (isPlaying) {
+      statusText.textContent = `Rendering: ${elapsed.toFixed(1)}s / ${DURATION.toFixed(1)}s`;
+      animFrame = requestAnimationFrame(runLoop);
+    }
+  } catch (err) {
+    reportError('Critical loop execution failed', err);
+  }
+}
+
+playBtn.addEventListener('click', () => {
+  try {
+    initAudio();
+    cancelAnimationFrame(animFrame);
+    triggeredCues.clear();
+    startTime = null;
+    isPlaying = true;
+    animFrame = requestAnimationFrame(runLoop);
+  } catch (e) { reportError('Failed to play animation', e); }
+});
+
+recordBtn.addEventListener('click', () => {
+  try {
+    initAudio();
+    const stream = canvas.captureStream(60);
+    
+    // Polyfill: Test optimal video capture mime types based on runtime environment
+    let selectedMime = 'video/webm';
+    if (typeof MediaRecorder.isTypeSupported === 'function') {
+      const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+      for (let t of types) {
+        if (MediaRecorder.isTypeSupported(t)) {
+          selectedMime = t;
+          break;
+        }
+      }
+    }
+    
+    const recorder = new MediaRecorder(stream, { mimeType: selectedMime });
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    
+    recorder.onstop = () => {
+      try {
+        const blob = new Blob(chunks, { type: selectedMime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ELMDE_Launch_Promo.webm';
+        a.click();
+        statusText.textContent = 'Success! webm file downloaded.';
+      } catch (e) { reportError('Exporting video blob failed', e); }
+    };
+
+    triggeredCues.clear();
+    startTime = null;
+    isPlaying = true;
+    recorder.start();
+    statusText.textContent = '🔴 Capturing high-speed WebM output...';
+    animFrame = requestAnimationFrame(runLoop);
+
+    setTimeout(() => {
+      if (recorder.state === 'recording') recorder.stop();
+    }, DURATION * 1000 + 300);
+  } catch (e) {
+    reportError('Recording mechanism failed. Playback instead.', e);
+  }
+});
+
+// Primary instant render trigger
+try {
+  drawBackground(0);
+  renderScene4(22.0); // Show off the finale slide as default state on initial file open!
+} catch (e) { reportError('Static pre-rendering failed', e); }
+</script>
+</body>
+</html>

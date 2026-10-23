@@ -3,14 +3,15 @@ Python Client SDK for the Equilibrium Latent-MoE Decision Engine (ELMDE).
 Provides clean, synchronous and asynchronous client interfaces for production integration.
 """
 
+import os
 from typing import Any, Dict, List, Optional
 import httpx
 
 
 class ELMDEClient:
     """Production client SDK for communicating with the ELMDE Serving API."""
-    def __init__(self, base_url: str = "http://localhost:8008", timeout: float = 30.0):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
+        self.base_url = (base_url or os.getenv("ELMDE_API_URL", "http://127.0.0.1:8008")).rstrip("/")
         self.timeout = timeout
 
     def check_health(self) -> Dict[str, Any]:

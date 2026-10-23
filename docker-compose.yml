@@ -15,7 +15,7 @@ services:
     volumes:
       - ./checkpoints:/app/checkpoints
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8008/health"]
       interval: 30s
       timeout: 5s
       retries: 3

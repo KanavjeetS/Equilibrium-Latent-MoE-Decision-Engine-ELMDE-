@@ -1,398 +1,303 @@
-# ⚡ Equilibrium Latent-MoE Decision Engine (ELMDE)
+# ELMDE: Equilibrium Latent-MoE Decision Engine
 
-<p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB.svg" alt="Python 3.10+" /></a>
-  <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C.svg" alt="PyTorch 2.2+" /></a>
-  <a href="#-system-architecture"><img src="https://img.shields.io/badge/Paradigm-System%201.5%20Latent%20Equilibrium-10b981.svg" alt="Paradigm: System 1.5 Latent Equilibrium" /></a>
-  <a href="#theorem-1-banach-fixed-point-contraction--unique-equilibrium-attractor"><img src="https://img.shields.io/badge/Banach_Contraction-%CF%81(J_%CE%A8)%20%E2%89%A4%200.6111-2962FF.svg" alt="Banach Contraction" /></a>
-  <a href="#theorem-3-multi-head-latent-attention-commutative-matrix-absorption"><img src="https://img.shields.io/badge/KV_Cache_Cut--92.97%25_to_98.5%25-AA00FF.svg" alt="KV Cache Cut" /></a>
-  <a href="#4-two-stage-selective-conformal-risk-control-scrc"><img src="https://img.shields.io/badge/Conformal_Risk-%E2%89%A4%200.01_(99.45%25_Floor)-FF6D00.svg" alt="Conformal Risk" /></a>
-</p>
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+![Status: research prototype](https://img.shields.io/badge/status-research%20prototype-orange.svg)
 
-<p align="center">
-  <img src="assets/hero_banner.svg" alt="ELMDE Hero Banner" width="100%" />
-</p>
+ELMDE is an R&D prototype of a **non-autoregressive decision model**. Instead of generating an answer token by token, it encodes the input once, compresses the encoder states into a low-rank attention memory (Multi-Head Latent Attention), refines a small set of latent "slots" with a weight-tied recurrent block that contains a mixture-of-experts layer, and then scores a **fixed set of outputs in one forward pass**: a softmax over candidate options, an ordinal (CORN) distribution, or a Beta distribution for a bounded continuous value. A confidence threshold calibrated with a conformal-risk-control style procedure decides whether a decision is accepted or escalated for review. The problem it targets is low-latency, calibrated decisions over a known option set (intent routing, tool selection, triage tiers) without token-by-token decoding.
 
-**ELMDE (Equilibrium Latent-MoE Decision Engine)** is a next-generation, non-autoregressive **"System 1.5" decision model** engineered to replace slow token-by-token LLM routing, Constrained Decoding Models (CDMs), and first-generation System 1 classifiers (**TypeSafe Jev** and **Convai Laya**).
-
-Instead of decomposing structured decisions into discrete subword tokens—which induces myopic prefix-sharing distortion and compounding stepwise projection taxes ($\text{KL} = \log \frac{1}{\alpha(h_t)}$)—ELMDE encodes the context state **once** into a compressed **Multi-Head Latent Attention (MLA)** cache, executes iterative multi-hop reasoning inside a **Contractive Looped LatentMoE Core**, and projects the converged fixed-point attractor $z^\star$ directly onto exact mathematical decision manifolds (`Choice`, `CORN Ordinal Score`, and `Continuous Beta Noul`) in **$O(1)$ pass**.
+The repository contains the architecture (PyTorch and a NumPy reference), training scripts, a FastAPI service, and component-level tests. **It does not yet contain accuracy, calibration, or latency results for a trained model on a real dataset, and no comparison against a real autoregressive baseline.** See [Status](#status) and [Benchmarks: current status](#benchmarks-current-status).
 
 ---
 
-## 🏆 Why ELMDE Outperforms Jev, Laya & Autoregressive CDMs
+## Contents
 
-<p align="center">
-  <img src="assets/benchmark_comparison.svg" alt="Benchmark Comparison Chart" width="100%" />
-</p>
-
-| Architectural Dimension | Autoregressive CDM (vLLM / Outlines) | Convai Laya (`laya`) | TypeSafe Jev (`jev-1.13.0`) | **ELMDE (Ours)** |
-| :--- | :--- | :--- | :--- | :--- |
-| **Reasoning Depth** | $O(T)$ discrete tokens | Fixed-depth dense encoder | Fixed single-pass cloud model | **Adaptive Contractive Looped LatentMoE ($1 \to R_{\max}$ ticks)** |
-| **50-Question Batch Latency** | ~11,500 ms | 771.0 ms (re-encodes state $50\times$) | ~490.0 ms (cloud API) | **~14.0 ms (Encode-Once MLA Cache, $55\times$ faster)** |
-| **KV Cache Footprint** | $100\%$ ($2 H d_h L$) | Full-rank encoder activations | Proprietary cloud | **$-92.97\%$ (`c_KV, k_R` Commutative Absorb Mode)** |
-| **High-Cardinality `Choice` (`Banking77`)** | Suffers prefix-sharing bias | **0.425** (192-token header limit) | 0.870 | **Unbounded Parallel Cross-Attention (Zero Truncation)** |
-| **Ordinal `Score` Topology** | Nominal token logits | Independent `[MASK]` tokens | Proprietary | **CORN Conditional Chain-Rule ($P(Y>k)=\prod \sigma(\eta_j)$)** |
-| **Continuous `Noul` Uncertainty** | Uncalibrated token probability | Scalar $p \in [0, 1]$ | Scalar $p \in [0, 1]$ | **Exact $\text{Beta}(\alpha, \beta)$ Density + Closed-Form Variance** |
-| **Calibration & Safety Bound** | High ECE | 0.081 – 0.213 ECE | 0.144 ECE | **0.0434 ECE (Dr. GRPO) + 99.45% Certified SCRC Gate** |
+- [Status](#status)
+- [Architecture](#architecture)
+- [What is implemented](#what-is-implemented)
+- [Planned / not yet validated](#planned--not-yet-validated)
+- [Benchmarks: current status](#benchmarks-current-status)
+- [Quickstart](#quickstart)
+- [Known issues](#known-issues)
+- [Repository map](#repository-map)
+- [Roadmap](#roadmap)
+- [License](#license)
+- [Citation](#citation)
 
 ---
 
-## 🧠 Core Mathematical Innovations
+## Status
 
-### 1. Hardware-Aligned Unpadded Backbone + MLA Commutative Matrix Absorption
-* **Zero-Padding Jagged Execution:** Variable-length inputs are packed into a single unpadded stream $X_{\text{unpad}} \in \mathbb{R}^{N_{\text{total}} \times d}$ with cumulative sequence index `cu_seqlens`, alternating local sliding-window attention ($w=128, \beta_{\text{local}}=10,000$) with global attention ($\beta_{\text{global}}=160,000$) for a **$2.65\text{--}3\times$ prefill speedup**.
-* **Commutative Matrix Absorption (Absorb Mode):** By decoupling RoPE into a dedicated subspace $d_r \ll d_h$ and absorbing the up-projections $W_{UK}^{(h)}$ and $W_{UV}^{(h)}$ directly into $W_{UQ}^{(h)}$ and $W_O^{(h)}$ ($W_{UKQ}^{(h)} = W_{UQ}^{(h)}(W_{UK}^{(h)})^\top$, $W_{UVO}^{(h)} = W_{UV}^{(h)}W_O^{(h)}$), ELMDE attends directly over the compressed latent vector $c_j^{KV} \in \mathbb{R}^{d_{kv}}$ without ever materializing full-rank Keys or Values in HBM (**maximum numerical deviation: $5.68 \times 10^{-14}$**).
+**Maturity:** research prototype. The code runs end to end and its components pass shape, range, and equivalence checks. There is no evidence yet that the model learns useful decisions on real data.
 
-### 2. Contractive Looped `LatentMoE` Core with $O(1)$-Memory Neumann VJP Gradients
-* **Breaking the $r^{0.46}$ Looped Scaling Bottleneck:** Dense looped transformers lose capacity against fresh parameters at fixed FLOPs. Embedding a routed **NVIDIA-style `LatentMoE`** bank inside a damped Banach contractive mapping:
-  $$z^{(r+1)} = (1 - \alpha) z^{(r)} + \alpha \, \Psi_\theta(z^{(r)}, z^{(0)}, \mathcal{M}_{KV})$$
-  allows specialized experts to fire at each recurrence tick $r \in \{1, \dots, R_{\max}\}$ and halt adaptively as soon as $\Vert{}z^{(r+1)} - z^{(r)}\Vert{}_\infty / \Vert{}z^{(r)}\Vert{}_\infty < \tau_{\text{halt}}$.
-* **Exact Implicit Function Theorem (IFT) Differentiation:** Backpropagates through the converged equilibrium point $z^\star$ in **$O(1)$ activation memory** using a $K$-step Neumann series Vector-Jacobian Product (VJP):
-  $$\frac{\partial \mathcal{L}}{\partial \theta} = \frac{\partial \mathcal{L}}{\partial z^\star} \left(\sum_{k=0}^K \left[J_{\mathcal{T}_\theta}(z^\star)\right]^k\right) \frac{\partial \mathcal{T}_\theta(z^\star, x)}{\partial \theta}$$
+**Checked in this revision (2026-11-07)** on a 2-vCPU Intel Xeon @ 2.10 GHz VM, 7 GB RAM, Linux, Python 3.13.18, PyTorch 2.15.0 (PyPI wheel, CPU execution), NumPy 2.5.4, transformers 5.22.2:
 
-### 3. Tri-Modal Zero-Distortion Heads & Strictly Proper Scoring RLCR
-* **Global `Choice` Head:** Normalizes globally over valid candidate embeddings with an input-dependent heteroscedastic temperature $\tau_\phi(z^\star) \in [\tau_{\min}, \tau_{\max}]$, achieving exact Bayesian calibration with $D_{\text{KL}}(P_{\text{true}} \parallel P_{\text{ELMDE}}) \equiv 0.000000$.
-* **Rank-Consistent `CORN` Ordinal Head:** Models conditional threshold transitions $q_j = P(Y > j \mid Y > j-1) = \sigma(\eta_j)$, guaranteeing strict rank monotonicity $P(Y > 0) > P(Y > 1) > \dots > P(Y > K-2)$ without CORAL weight-tying restrictions.
-* **Continuous `Beta` Density (`Noul`) Head:** Parameterizes $\text{Beta}(\alpha_\theta(z^\star), \beta_\theta(z^\star))$ to output both posterior truth probability $\frac{\alpha}{\alpha+\beta}$ and exact closed-form epistemic variance.
-* **Strictly Proper RLCR (Dr. GRPO):** Optimizes a composite strictly proper scoring reward combining the **Logarithmic**, **Brier**, **Spherical**, and **Ranked Probability Scores (RPS)**, cutting test ECE from $0.1099 \to 0.0434$.
+| Check | Result |
+| :--- | :--- |
+| `python -m pytest tests/ verify_production.py -v` | **9 passed** in about 13 s |
+| `python elmde_engine.py` (NumPy, float64) | all assertions pass; MLA absorb vs. decompress max abs. difference 1.1e-15 (logits), 8.9e-16 (outputs) |
+| MLA absorb vs. decompress, PyTorch float32 (`verify_production.py`) | max abs. difference 1.5e-7 |
+| Recurrent core convergence (random init, bundled checkpoint, NumPy reference) | in every run observed, stopped at the step cap (5 or 6 steps) with relative residual 0.15 to 0.28; the halting tolerance of 1e-3 was never reached |
+| `demo_inference.py`, `train_and_benchmark_elmde.py` (default mode), FastAPI app under `uvicorn` | run without errors |
 
-### 4. Two-Stage Selective Conformal Risk Control (SCRC)
-* Calibrates a finite-sample distribution-free gate $g(x) \ge 1 - \hat{\lambda}_1$ on held-out calibration data so that accepted System 1.5 decisions are mathematically certified to satisfy:
-  $$\mathbb{E}\left[\ell(C_{\hat{\lambda}_2}(X_{n+1}), Y_{n+1}) \;\middle\vert{}\; g(X_{n+1}) \ge 1 - \hat{\lambda}_1\right] \le \alpha_{\text{target}}$$
-  while automatically escalating ambiguous inputs to a System 2 reasoning LLM.
+**Not checked here:** the Hugging Face Hub was unreachable from the test machine, so nothing that downloads ModernBERT weights, tokenizer vocabularies, or datasets (Banking77) was run. Offline, transformers 5.22 did not raise an error: `ELMDETokenizer("bert-base-uncased")` returned a tokenizer with a 5-token vocabulary, so every word became `[UNK]`. Scripts that take raw text (`example_injection.py`, `benchmark_efficiency.py`) therefore ran, but their text inputs were not meaningful. Run them with Hub access.
+
+**About the bundled checkpoint.** `checkpoints/elmde_production.pt` (12,687,624 parameters, `d_model=256`, 3 encoder layers) matches the configuration in `train_production_weights.py`. That script trains on 20 hand-written sentences repeated 25 times and shuffled 80/20. Every validation sentence also appears in training, so the checkpoint is a smoke-test artifact, not a trained decision model. `checkpoints/scrc_calibration.json` (tau* = 0.9977, with the warning "Strict bound could not be met across full grid; fallback to max confidence") was not computed from model predictions. It is the fallback output of the `/v1/conformal/calibrate` call in `verify_production.py` on synthetic confidences, and running that test rewrites the file.
 
 ---
 
-## 🧠 System Architecture
-
-<p align="center">
-  <img src="assets/architecture_motion.svg" alt="Animated System Architecture Diagram" width="100%" />
-</p>
+## Architecture
 
 ```mermaid
 flowchart TD
-    In["Context Input: Raw Text Prompt or Token Stream"] --> Enc["ModernBERT-large Bidirectional Backbone (d = 1024)"]
-    Enc --> SVD["Truncated SVD Grafter: Wqkv to W_DQ, W_UQ, W_DKV, W_UK, W_UV"]
-    SVD --> MLA["Multi-Head Latent Attention (Commutative Matrix Absorption)"]
-    MLA --> Bank["Compressed Latent KV Memory Cache: c_KV (128-d) and k_R (32-d)"]
-    
-    Bank --> Core["Contractive Recurrent-Depth Latent-MoE Core (Max 6 Steps)"]
-    Slots["Working Memory Latent Slots (M = 8 Slots, d = 1024)"] --> Core
-    Core --> Banach["Banach Damped Update: z^(r+1) = (1 - alpha) z^(r) + alpha Phi(z^(r))"]
-    Banach --> Residual{"Residual Check: ||z^(r+1) - z^(r)||_inf < 1e-3"}
-    Residual -->|"Residual Above 1e-3 and r < 6"| Core
-    Residual -->|"Converged or r = 6"| ZStar["Equilibrium Fixed-Point Attractor z*"]
-    
-    ZStar --> H1["1. Heteroscedastic Choice Head (Exact Bayes Posterior)"]
-    ZStar --> H2["2. CORN Ordinal Head (Monotonic Survival P(Y > k))"]
-    ZStar --> H3["3. Continuous Beta Density Head (Mean and Variance)"]
-    
-    H1 --> Gate["Two-Stage Selective Conformal Risk Control Gate (tau* = 0.9848)"]
-    H2 --> Gate
-    H3 --> Gate
-    
-    Gate -->|"Confidence at or above tau*"| Acc["AUTOMATIC ACCEPTANCE (Certified Error at most 1%)"]
-    Gate -->|"Confidence below tau*"| Esc["ABSTAIN AND ESCALATE (Human-in-the-Loop Review)"]
-
-    classDef default fill:#111827,stroke:#334155,stroke-width:1.5px,color:#e2e8f0;
-    classDef core fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#c7d2fe;
-    classDef head fill:#0c1929,stroke:#0284c7,stroke-width:2px,color:#38bdf8;
-    classDef accept fill:#052e16,stroke:#22c55e,stroke-width:2px,color:#4ade80;
-    classDef escalate fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fca5a5;
-
-    class In,Enc,SVD,MLA,Bank default;
-    class Core,Slots,Banach,Residual,ZStar core;
-    class H1,H2,H3 head;
-    class Gate default;
-    class Acc accept;
-    class Esc escalate;
+    IN["Input text"] --> TOK["Tokenizer<br/>elmde/data/tokenizer.py: ELMDETokenizer"]
+    TOK --> ENC["Bidirectional encoder: embedding + N x (MLA self-attention + SwiGLU)<br/>elmde/nn/model.py: ELMDEModel.encode_context"]
+    ENC --> MEM["Compressed attention memory (c_KV, k_R) from the last layer<br/>elmde/nn/mla.py: MultiHeadLatentAttention.compress_kv"]
+    ENC --> SLOTS["Latent slots z0 = learned slot embeddings + mean-pooled context"]
+    SLOTS --> CORE["Weight-tied recurrent core, at most R_max steps:<br/>MLA cross-attention, sparse MoE, bounded damped update<br/>elmde/nn/equilibrium_core.py: ContractiveEquilibriumCore"]
+    MEM --> CORE
+    CORE --> POOL["Mean-pool slots + RMSNorm = decision vector"]
+    POOL --> H1["Choice head: softmax over candidate embeddings<br/>elmde/nn/heads.py: HeteroscedasticGlobalChoiceHead"]
+    POOL --> H2["Ordinal head (CORN)<br/>elmde/nn/heads.py: CORNHead"]
+    POOL --> H3["Bounded continuous head: Beta(a, b)<br/>elmde/nn/heads.py: BetaDensityHead"]
+    H1 --> GATE{"Top probability >= tau*?<br/>elmde/conformal/scrc.py"}
+    H2 --> GATE
+    GATE -->|yes| ACC["ACCEPTED"]
+    GATE -->|no| ESC["ABSTAIN_ESCALATE"]
 ```
 
----
+The recurrent core applies a damped update to the slots `z` (default `alpha = 0.45`, `R_max = 6`):
 
-## 📐 Formal Mathematical Proofs
+$$z^{(r+1)} = (1-\alpha)\,z^{(r)} + \alpha\,\Psi_\theta\big(z^{(r)};\, z^{(0)}, c_{KV}, k_R\big)$$
 
-<p align="center">
-  <img src="assets/convergence_motion.svg" alt="Banach Fixed-Point Convergence" width="100%" />
-</p>
+In eval mode it stops early when the relative change $\max_{\text{slots}} \lVert z^{(r+1)}-z^{(r)}\rVert_\infty / \lVert z^{(r)}\rVert_\infty$ falls below $10^{-3}$. $\Psi_\theta$ ends with a scaled `tanh`, which bounds the magnitude of its output but does **not** by itself make the map a contraction (see [Known issues](#known-issues)).
 
-### Theorem 1: Banach Fixed-Point Contraction & Unique Equilibrium Attractor
+The ordinal head uses CORN conditional probabilities, so the survival curve is non-increasing by construction:
 
-**Statement:** Let $\mathcal{Z} = \mathbb{R}^{M \times d}$ be the Banach space of working memory latents endowed with the norm $\|z\|_\infty = \max_{i, j} |z_{i, j}|$. Define the damped recurrent operator:
-$$\Psi(z; x) = (1 - \alpha) z + \alpha \, \Phi(z; x)$$
-where $\alpha \in (0, 1)$ is the damping factor and $\Phi(z; x) = \text{LatentMoE}(\text{CrossAttn}(z, \mathcal{M}_{KV}(x)))$. If the Jacobian of $\Phi$ satisfies $\|\mathcal{J}_\Phi(z)\|_\infty \le \kappa$, and $\alpha$ is chosen such that:
-$$L_\Psi \triangleq (1 - \alpha) + \alpha \kappa < 1$$
-then $\Psi(\cdot; x)$ is a strict contraction mapping. Consequently, there exists a **unique global fixed-point attractor** $z^* \in \mathcal{Z}$ such that $z^* = \Psi(z^*; x)$, and the Picard iteration $z^{(r+1)} = \Psi(z^{(r)}; x)$ converges geometrically:
-$$\|z^{(r)} - z^*\|_\infty \le \frac{L_\Psi^r}{1 - L_\Psi} \|z^{(1)} - z^{(0)}\|_\infty$$
-ruling out periodic orbits, limit cycles, and chaotic divergence.
+$$P(Y > k \mid x) = \prod_{j=0}^{k} \sigma\big(\eta_j(x)\big)$$
 
-**Proof:**
-For any two latent states $z_1, z_2 \in \mathcal{Z}$, by the Mean Value Theorem on vector spaces:
-$$\Psi(z_1; x) - \Psi(z_2; x) = \int_0^1 \mathcal{J}_\Psi(z_2 + t(z_1 - z_2)) \, dt \cdot (z_1 - z_2)$$
-Taking the operator norm:
-$$\|\Psi(z_1; x) - \Psi(z_2; x)\|_\infty \le \sup_{z \in \mathcal{Z}} \|\mathcal{J}_\Psi(z)\|_\infty \|z_1 - z_2\|_\infty$$
-Note that $\mathcal{J}_\Psi(z) = (1 - \alpha) I + \alpha \mathcal{J}_\Phi(z)$. By the triangle inequality:
-$$\|\mathcal{J}_\Psi(z)\|_\infty \le (1 - \alpha) \|I\|_\infty + \alpha \|\mathcal{J}_\Phi(z)\|_\infty \le (1 - \alpha) + \alpha \kappa = L_\Psi$$
-Since $L_\Psi < 1$, $\Psi$ is a strict contraction on the complete metric space $(\mathcal{Z}, \|\cdot\|_\infty)$. By the **Banach Fixed-Point Theorem**, there exists a unique fixed point $z^* = \Psi(z^*; x)$. Furthermore:
-$$\|z^{(r)} - z^*\|_\infty = \|\Psi(z^{(r-1)}) - \Psi(z^*)\|_\infty \le L_\Psi \|z^{(r-1)} - z^*\|_\infty \le L_\Psi^r \|z^{(0)} - z^*\|_\infty$$
-Using $\|z^{(0)} - z^*\| \le \sum_{k=0}^\infty \|z^{(k)} - z^{(k+1)}\| \le \frac{1}{1 - L_\Psi} \|z^{(0)} - z^{(1)}\|$, the geometric rate is established. In our production model with $\alpha = 0.450$ and empirical $\kappa \le 0.1358$, the spectral radius is bounded by $\rho(\mathcal{J}_\Psi) \le 0.6111 < 1.0000$, guaranteeing convergence in $R \le 5$ iterations. $\blacksquare$
+| Component | What the code does | Where |
+| :--- | :--- | :--- |
+| Tokenizer | Hugging Face `AutoTokenizer` wrapper (ModernBERT-base, falling back to `bert-base-uncased`); can also emit packed streams with `cu_seqlens` | `elmde/data/tokenizer.py`: `ELMDETokenizer` |
+| Encoder | Token embedding + `n_encoder_layers` pre-RMSNorm blocks (MLA self-attention, SwiGLU FFN), no causal mask | `elmde/nn/model.py`: `EncoderBlock`, `ELMDEModel` |
+| Multi-Head Latent Attention | Keys/values compressed to `d_kv_latent` (128) plus a shared decoupled-RoPE key `d_rope` (32). An `absorb` mode multiplies the up-projections into the query/output projections so per-head K/V are not formed; a `decompress` mode is kept for reference | `elmde/nn/mla.py`: `MultiHeadLatentAttention`; `elmde/nn/rope.py`: `DecoupledRoPE` |
+| Mixture of experts | One always-on shared SwiGLU expert + `n_experts` routed SwiGLU experts, top-k routing, Switch-style load-balancing loss | `elmde/nn/sparse_moe.py`: `SparseMoELayer`; `elmde/nn/swiglu.py` |
+| Recurrent core | Anchor injection, MLA cross-attention from slots to the context memory, MoE, `s * 4 * tanh(x/4)` bound (trainable `s` clamped to [0.5, 0.92]), damped update, residual-based halting | `elmde/nn/equilibrium_core.py`: `ContractiveEquilibriumCore` |
+| Heads | Choice: dot-product scores against caller-supplied candidate embeddings, input-dependent temperature in [0.1, 5], optional validity mask. Ordinal: CORN. Continuous: Beta with `a, b = 1 + softplus(.)`, closed-form mean and variance | `elmde/nn/heads.py` |
+| Decision gate | Accept if the top probability is at least `tau*`. `calibrate()` scans thresholds and keeps those whose bound `(m/(m+1)) * R_hat + B/(m+1)` on the `m` accepted calibration points is at most `alpha` | `elmde/conformal/scrc.py`: `SelectiveConformalRiskController` |
+| Pretrained-backbone variant | Hugging Face backbone (default `answerdotai/ModernBERT-base`) feeding the same MLA memory, core, and heads | `elmde/nn/foundation_model.py`: `ELMDEFoundationModel` |
+| High-level API | `decide`, `triage`, `estimate`, `route_tool`, `guardrail` decorator, `as_langchain_router`. Option strings are embedded with the same encoder (mean-pooled) and cached | `elmde/injector.py`: `ELMDE` |
+| HTTP API | FastAPI: `/health`, `/metrics` (Prometheus), `/v1/predict/{choice,ordinal,density}`, `/v1/conformal/calibrate` | `elmde/serving/api.py` |
+
+A second, self-contained implementation lives in `train_and_benchmark_elmde.py` (`ELMDEProductionEngine`). It differs from the package: candidate options are fed in as the latent slots and each is scored by a linear layer; experts run in a low-dimensional latent space (`LatentMoESwiGLU`); the MLA projections can be initialised by truncated SVD of ModernBERT-large's last attention layer; and gradients use a Neumann-series implicit-differentiation hook (`solve_equilibrium_with_exact_ift`). A NumPy reference of each component, with a self-check, is in `elmde_model.py`.
 
 ---
 
-### Theorem 2: $O(1)$ Activation Memory Adjoint via Implicit Function Theorem (IFT)
+## What is implemented
 
-**Statement:** Let $z^*(\theta)$ be the equilibrium solution satisfying the equilibrium root equation $F(z^*, \theta) \triangleq z^* - \Psi(z^*, \theta; x) = 0$, and let $\mathcal{L}(z^*)$ be a scalar loss function. The exact gradient $\frac{\partial \mathcal{L}}{\partial \theta}$ can be computed with **constant $O(1)$ activation memory** (independent of the number of recurrent iterations $R$) via the adjoint vector:
-$$\frac{\partial \mathcal{L}}{\partial \theta} = v^\top \frac{\partial \Psi(z^*, \theta; x)}{\partial \theta}, \quad \text{where } v^\top = \frac{\partial \mathcal{L}}{\partial z^*} \left( I - \mathcal{J}_\Psi(z^*) \right)^{-1}$$
-and the matrix inverse is computed via the absolutely convergent $K$-step Neumann series:
-$$\left( I - \mathcal{J}_\Psi(z^*) \right)^{-1} = \sum_{k=0}^\infty \left( \mathcal{J}_\Psi(z^*) \right)^k$$
+- PyTorch model (`ELMDEModel`) with encoder, MLA (absorb and decompress paths), sparse MoE, weight-tied recurrent core, and three output heads; save/load helpers.
+- Variant on a pretrained Hugging Face encoder (`ELMDEFoundationModel`) and its training script (`train_foundation_model.py`), which trains CORN, Beta NLL, and choice losses on the bundled synthetic corpus and then calibrates the gate.
+- Standalone variant (`train_and_benchmark_elmde.py`) with truncated-SVD initialisation from ModernBERT, latent-space MoE, Neumann-series implicit gradients, and a loss that combines strictly proper scoring rules (log, Brier, spherical, plus RPS for ordinal targets) with a GRPO-style term computed from Gaussian-perturbed logits.
+- Losses: CORN, Beta negative log-likelihood, choice cross-entropy with a temperature penalty, scoring-rule utilities (`elmde/training/`).
+- Generic trainer (`ELMDETrainer`, ordinal objective only) with AdamW, cosine schedule, gradient clipping, and AMP on CUDA.
+- Threshold-based accept/escalate gate with offline calibration, plus an online threshold-update controller (`elmde/conformal/adaptive_scrc.py`) that is not yet wired into the engine or API.
+- High-level Python API (`ELMDE`), FastAPI service with Prometheus counters, and an `httpx` client (`elmde/client.py`).
+- NumPy reference implementation and self-check (`elmde_model.py`, `elmde_engine.py`).
+- Tests: `verify_production.py` (8 component and API checks) and `tests/test_adversarial_stability.py` (step counts, residual, CORN monotonicity, and Beta range on a randomly initialised model).
+- Synthetic data generator (`elmde/data/generate_rich_corpus.py`) and its output in `data/`: 2,000 train and 500 validation template-generated records in four domains, with labels derived from the templates.
 
-**Proof:**
-Applying the chain rule to the scalar loss:
-$$\frac{\partial \mathcal{L}}{\partial \theta} = \frac{\partial \mathcal{L}}{\partial z^*} \frac{\partial z^*}{\partial \theta}$$
-Differentiating the equilibrium identity $z^*(\theta) = \Psi(z^*(\theta), \theta; x)$ with respect to $\theta$ yields:
-$$\frac{\partial z^*}{\partial \theta} = \frac{\partial \Psi}{\partial z^*} \frac{\partial z^*}{\partial \theta} + \frac{\partial \Psi}{\partial \theta} = \mathcal{J}_\Psi(z^*) \frac{\partial z^*}{\partial \theta} + \frac{\partial \Psi}{\partial \theta}$$
-Rearranging terms:
-$$\left( I - \mathcal{J}_\Psi(z^*) \right) \frac{\partial z^*}{\partial \theta} = \frac{\partial \Psi}{\partial \theta} \quad \Longrightarrow \quad \frac{\partial z^*}{\partial \theta} = \left( I - \mathcal{J}_\Psi(z^*) \right)^{-1} \frac{\partial \Psi}{\partial \theta}$$
-Substituting this expression into the loss gradient:
-$$\frac{\partial \mathcal{L}}{\partial \theta} = \frac{\partial \mathcal{L}}{\partial z^*} \left( I - \mathcal{J}_\Psi(z^*) \right)^{-1} \frac{\partial \Psi}{\partial \theta} = v^\top \frac{\partial \Psi}{\partial \theta}$$
-where $v$ satisfies the linear adjoint system $\left( I - \mathcal{J}_\Psi(z^*) \right)^\top v = \left( \frac{\partial \mathcal{L}}{\partial z^*} \right)^\top$.
-Because $\rho(\mathcal{J}_\Psi) \le L_\Psi < 1$, the spectral radius of $\mathcal{J}_\Psi(z^*)$ is strictly inside the unit disc. Therefore, the Neumann series converges unconditionally:
-$$\left( I - \mathcal{J}_\Psi(z^*) \right)^{-1} = \sum_{k=0}^\infty \left( \mathcal{J}_\Psi(z^*) \right)^k$$
-The Vector-Jacobian Product (VJP) $v^\top$ is computed iteratively using fixed point recurrence on detached $z^*$:
-$$v_0 = \frac{\partial \mathcal{L}}{\partial z^*}, \quad v_{k+1} = v_0 + v_k \mathcal{J}_\Psi(z^*)$$
-Because this computation only requires $z^*$ and does not require intermediate activations $\{z^{(1)}, \dots, z^{(R-1)}\}$, the forward and backward passes operate in strict $O(1)$ memory. $\blacksquare$
+## Planned / not yet validated
 
----
-
-### Theorem 3: Multi-Head Latent Attention Commutative Matrix Absorption
-
-<p align="center">
-  <img src="assets/mla_matrix_absorption.svg" alt="MLA Commutative Matrix Absorption" width="100%" />
-</p>
-
-**Statement:** In Multi-Head Latent Attention (MLA), let the compressed KV latent vector be $c^{KV} = x W_{DKV} \in \mathbb{R}^{L \times d_{kv}}$ and the decoupled rotary key be $k^R \in \mathbb{R}^{L \times d_r}$. Define the absorbed attention matrices:
-$$W_{UKQ}^{(h)} \triangleq W_{UQ}^{(h)} \left( W_{UK}^{(h)} \right)^\top \in \mathbb{R}^{d_q \times d_{kv}}, \quad W_{UVO}^{(h)} \triangleq W_{UV}^{(h)} W_O^{(h)} \in \mathbb{R}^{d_{kv} \times d_{\text{model}}}$$
-Then the attention score between query $q$ and key $k$, and the resulting attention output context, can be computed **without ever materializing the uncompressed key $k \in \mathbb{R}^{L \times H \times d_{\text{head}}}$ or value $v \in \mathbb{R}^{L \times H \times d_{\text{head}}}$ in High-Bandwidth Memory (HBM)**, while preserving exact algebraic equivalence:
-$$q_h k_h^\top \equiv \left( c^Q W_{UKQ}^{(h)} \right) (c^{KV})^\top + q_h^R (k^R)^\top$$
-$$A_h \cdot v_h \cdot W_O^{(h)} \equiv \left( A_h \cdot c^{KV} \right) W_{UVO}^{(h)}$$
-
-**Proof:**
-By definition of MLA low-rank projections:
-$$q_h = c^Q W_{UQ}^{(h)} \in \mathbb{R}^{d_{\text{head}}}, \quad k_h = c^{KV} W_{UK}^{(h)} \in \mathbb{R}^{d_{\text{head}}}$$
-The inner product between uncompressed query and key heads is:
-$$q_h k_h^\top = \left( c^Q W_{UQ}^{(h)} \right) \left( c^{KV} W_{UK}^{(h)} \right)^\top = c^Q W_{UQ}^{(h)} \left( W_{UK}^{(h)} \right)^\top (c^{KV})^\top$$
-By associativity of matrix multiplication over $\mathbb{R}$:
-$$q_h k_h^\top = c^Q \left( W_{UQ}^{(h)} \left( W_{UK}^{(h)} \right)^\top \right) (c^{KV})^\top = c^Q W_{UKQ}^{(h)} (c^{KV})^\top$$
-Adding the decoupled rotary key-query component $q_h^R (k^R)^\top$ establishes the score identity.
-Similarly, for the value and output projection with attention weights $A_h \in \mathbb{R}^{M \times L}$:
-$$\text{Output}_h = A_h v_h W_O^{(h)} = A_h \left( c^{KV} W_{UV}^{(h)} \right) W_O^{(h)} = \left( A_h c^{KV} \right) \left( W_{UV}^{(h)} W_O^{(h)} \right) = \left( A_h c^{KV} \right) W_{UVO}^{(h)}$$
-Summing across all heads $h \in \{1, \dots, H\}$ yields the complete output. The KV cache footprint drops from $2 \times L \times H \times d_{\text{head}}$ to $L \times (d_{kv} + d_r)$, which for our configuration ($1024 \to 128 + 32$) yields a **98.5% KV cache memory reduction**. $\blacksquare$
+- **Accuracy and calibration on real data.** `train_and_benchmark_elmde.py --benchmark-hub` downloads ModernBERT-large, PolyAI/banking77, and LocalLLaMA/typed-decisions, encodes the 77 Banking77 intent names, and prints dataset sizes. It does not train or evaluate. No accuracy or ECE figure on real data is produced anywhere in the repo; the default demo prints an ECE computed on simulated confidences. Whether `LocalLLaMA/typed-decisions` exists on the Hub was not verified.
+- **Calibration training (proper scoring / GRPO-style loss).** Implemented, but only exercised on random tensors: 15 optimizer steps on a single example.
+- **Risk guarantee on model outputs.** No calibration on model predictions is committed (see [Status](#status)), the package's `calibrate()` has a scan bug (see [Known issues](#known-issues)), and the conditional guarantee for the selected subset is stated in the docstrings but not tested.
+- **Convergence of the recurrent core.** Not guaranteed by the architecture, and not observed with the current weights.
+- **Memory-efficient implicit gradients in the package model.** Only the standalone script implements them.
+- **Unpadded/packed execution and local sliding-window attention.** The tokenizer and collator emit `cu_seqlens`, but no model consumes them. `local_window_size` and `rope_theta_local` in `ELMDEConfig` are unused by the PyTorch model.
+- **SVD initialisation quality.** The code runs (on random matrices in the default demo), but how much of ModernBERT's attention it preserves has not been measured.
+- **Container deployment.** See [Known issues](#known-issues).
 
 ---
 
-## 🚀 Quickstart
+## Benchmarks: current status
 
-### 1. Clone & Install
+**No trained-model accuracy, calibration, or latency results are reported yet.** In particular, no script in this repository produces results on a real dataset, or comparisons with other decision systems or products. Earlier versions of this README quoted such figures; they are not reproducible from this code and have been removed (see the note at the end of this section).
+
+### What the included benchmark scripts measure
+
+- **`benchmark_comparative_cdm.py`** compares ELMDE with a *simulated* autoregressive baseline. Each "decoding step" of the baseline applies one randomly initialised `nn.Linear(d_model, vocab)` to a `torch.randn` vector, with a random mask. There are no transformer layers, no real language model, and no constrained-decoding library. The ELMDE side is a randomly initialised `ELMDEModel`. The memory column compares a formula for a 6-layer K/V cache with one layer's `(c_KV, k_R)`. The KL-divergence section uses hard-coded distributions, and the "ELMDE" distribution is defined as a copy of the target, so `D_KL = 0` holds by construction. At most, the script shows the relative cost of one encoder forward pass versus a loop of output projections under that setup; it says nothing about ELMDE versus real constrained decoding. On the machine above, it reported ELMDE as slower than the simulated baseline in 3 of 4 settings. Its printed 2.73x average speed-up is driven by the first baseline measurement (652 ms, versus 101 to 196 ms for the later, longer runs), which is timed without warm-up.
+- **`benchmark_efficiency.py`** loads the checkpoint and reports component sanity outputs: absorb vs. decompress timing and agreement for one MLA layer, core steps and residual, head outputs, and forward latency. Its conformal section evaluates the stored threshold on *simulated* confidences, not model outputs. It needs the Hub tokenizer.
+- **`train_and_benchmark_elmde.py`** (default mode) runs the standalone variant on random tensors. Its "Banking77" step uses 77 random option vectors and a random context, and its gate calibration uses simulated confidences.
+
+### What you can measure today
+
+Forward latency of one ordinal decision (batch 1, 128 random token ids, `torch.no_grad`, 5 warm-up and 50 timed runs). This measures the model's cost only: the weights are untrained or barely trained, and nothing is being compared.
+
+| Model | Parameters | p50 | p90 |
+| :--- | ---: | ---: | ---: |
+| Bundled checkpoint (`d_model=256`, 3 encoder layers, 5 core steps) | 12.7 M | 11 to 13 ms | 12 to 15 ms |
+| Default `ELMDEConfig` (`d_model=768`, 6 encoder layers, 8 experts, 6 core steps), random init | 120.5 M | 97 to 103 ms | 111 to 130 ms |
+
+Ranges over three runs on the 2-vCPU machine described in [Status](#status). To reproduce, paste into `python` from the repository root:
+
+```python
+import time, torch
+from elmde.config import ELMDEConfig
+from elmde.nn.model import ELMDEModel
+
+def p50_p90(model, seq_len=128, runs=50):
+    torch.manual_seed(0)
+    x = torch.randint(0, model.config.vocab_size, (1, seq_len))
+    with torch.no_grad():
+        for _ in range(5):
+            model.forward_ordinal(x)
+        ts = []
+        for _ in range(runs):
+            t = time.perf_counter(); model.forward_ordinal(x); ts.append((time.perf_counter() - t) * 1e3)
+    ts.sort()
+    return ts[runs // 2], ts[int(runs * 0.9)]
+
+print(p50_p90(ELMDEModel.from_pretrained("checkpoints/elmde_production.pt").eval()))
+print(p50_p90(ELMDEModel(ELMDEConfig()).eval()))
+```
+
+Other reproducible checks: `python elmde_engine.py` (NumPy reference: MLA equivalence, CORN monotonicity, gate calibration on simulated data) and `python -m pytest tests/ verify_production.py -v`.
+
+---
+
+## Quickstart
+
+The Python commands below were run for this revision on the machine described in [Status](#status), in a virtual environment containing the packages from `requirements.txt` plus `pytest`. `datasets` and `accelerate` were left out because only `--benchmark-hub` needs them. The packages were installed with `uv`; the `pip install` line itself was not run.
+
 ```bash
 git clone https://github.com/KanavjeetS/Equilibrium-Latent-MoE-Decision-Engine-ELMDE-.git
 cd Equilibrium-Latent-MoE-Decision-Engine-ELMDE-
-pip install torch numpy transformers datasets accelerate
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt pytest
+
+python elmde_engine.py                               # NumPy reference self-check (no PyTorch needed)
+python -m pytest tests/ verify_production.py -v      # 9 tests; note: rewrites checkpoints/scrc_calibration.json
+python demo_inference.py                             # head outputs for random token ids, using the bundled checkpoint
+python train_and_benchmark_elmde.py                  # standalone variant on random tensors (about 7 s on CPU)
+uvicorn elmde.serving:app --port 8008                # then: curl localhost:8008/health
 ```
 
-### 2. Run the Mathematical Verification Suite (Pure NumPy + PyTorch)
-Verify MLA Commutative Matrix Absorption equivalence ($5.68 \times 10^{-14}$ error), Contractive Looped MoE convergence, CORN rank monotonicity, and SCRC 50,000-sample risk certification:
-```bash
-python elmde_engine.py
-python train_and_benchmark_elmde.py
-```
+Minimal use of the model with token ids (verified from the repository root; no Hub access needed):
 
-### 3. Graft `ModernBERT-large` via Truncated SVD & Run Multi-Modal Decisions
 ```python
 import torch
-from train_and_benchmark_elmde import ELMDETrainConfig, ELMDEProductionEngine
+from elmde.nn.model import ELMDEModel
 
-cfg = ELMDETrainConfig(backbone_name="answerdotai/ModernBERT-large")
-engine = ELMDEProductionEngine(cfg, load_pretrained=False)
-
-# 1. Encode document state once and evaluate 77 candidate options in parallel
-state_emb = torch.randn(128, cfg.d_model)
-option_queries = torch.randn(77, cfg.d_model)
-
-choice_out = engine.forward_FromEmbeddings(state_emb, option_queries, q_type="choice")
-score_out  = engine.forward_FromEmbeddings(state_emb, option_queries[:4], q_type="score", num_ordinal_levels=5)
-noul_out   = engine.forward_FromEmbeddings(state_emb, option_queries[:1], q_type="noul")
-
-print("Top Choice Index:", int(choice_out["probs"].argmax()), "| Ticks:", choice_out["ticks"])
-print("CORN Monotonic Survival:", score_out["cum_survival"].tolist())
-print("Noul Mean & Epistemic Variance:", noul_out["probs"][0].item(), noul_out["variance"].item())
+model = ELMDEModel.from_pretrained("checkpoints/elmde_production.pt").eval()
+input_ids = torch.randint(0, model.config.vocab_size, (1, 32))   # stand-in for tokenizer output
+candidates = torch.randn(1, 4, model.config.d_model)             # one embedding per option
+with torch.no_grad():
+    probs, tau, info = model.forward_choice(input_ids, candidates)
+    class_probs, survival, _ = model.forward_ordinal(input_ids)
+print(probs, survival, int(info["steps_taken"]), float(info["final_residual"]))
 ```
+
+High-level text API. This needs the `bert-base-uncased` tokenizer from the Hugging Face Hub. With the bundled checkpoint the choices are not meaningful, and the stored threshold (0.9977) escalates almost every decision.
+
+```python
+from elmde import ELMDE
+
+engine = ELMDE.load()   # checkpoints/elmde_production.pt + checkpoints/scrc_calibration.json
+res = engine.decide("I was charged twice for one purchase",
+                    choices=["transaction_charged_twice", "card_payment_fee_charged", "refund_not_showing_up"])
+print(res.choice, round(res.confidence, 3), res.status)
+```
+
+**Not verified in this revision (need Hub access or a GPU):**
+
+- `python train_production_weights.py`: needs the `bert-base-uncased` tokenizer. It **overwrites** `checkpoints/elmde_production.pt` and `checkpoints/scrc_calibration.json`.
+- `python train_foundation_model.py`: downloads ModernBERT-base and trains on `data/`. It writes `checkpoints/elmde_foundation_production.pt`, which is not included in the repo.
+- `python train_and_benchmark_elmde.py --benchmark-hub`: downloads ModernBERT-large and the datasets. It does not evaluate (see above).
+- `python example_injection.py` and `python benchmark_efficiency.py`: these ran here, but with a degenerate offline tokenizer.
+- `docker compose up --build`: expected to fail (see below).
 
 ---
 
-## 💉 4 Plug-and-Play Injection Recipes for Any AI / LLM Project
+## Known issues
 
-ELMDE is designed to be injected directly into any agent framework, LangChain / LlamaIndex pipeline, or custom PyTorch code with **zero background daemons or open ports**:
-
-### Recipe 1: Fast-Pathing Agent Tool & Function Calling (<35ms, 0 Tokens)
-Bypasses slow 1500ms LLM tool-calling passes and hallucinated JSON schemas:
-```python
-from elmde import ELMDE
-
-engine = ELMDE.load()
-
-tools = {
-    "search_docs": lambda q: f"Docs for {q}",
-    "query_database": lambda q: f"SQL records for {q}",
-    "process_refund": lambda q: f"Refund status for {q}",
-    "escalate_human": lambda q: f"Handed off to agent: {q}"
-}
-
-func, decision = engine.route_tool(
-    prompt="Can you refund transaction #TX-99201? The customer received a damaged item.",
-    tools=tools
-)
-
-print(f"Routed Tool: {decision.choice} ({decision.latency_ms:.1f} ms)")
-print(f"Result: {func('TX-99201')}")
-```
-
-### Recipe 2: High-Cardinality Intent Routing (77+ Choices)
-Where traditional LLMs and Laya collapse due to prompt truncation on `Banking77` (Laya collapsed to $0.425$), ELMDE evaluates all 77+ options in parallel with **0.912 SOTA accuracy**:
-```python
-from elmde import ELMDE
-
-engine = ELMDE.load()
-
-banking_intents = [
-    "card_arrival", "card_linking", "exchange_rate", "card_payment_fee_charged",
-    "extra_charge_on_statement", "refund_not_showing_up", "pin_blocked",
-    # ... up to 100+ choices
-]
-
-result = engine.decide(
-    prompt="I noticed an unauthorized charge of $84.20 on my monthly statement.",
-    choices=banking_intents
-)
-print(f"Top Intent: {result.choice} | Safe: {result.is_safe}")
-```
-
-### Recipe 3: Monotonic Clinical & Legal Triage Guardrails
-Guarantees rank consistency ($P(Y > k) \ge P(Y > k+1)$ strictly certified):
-```python
-from elmde import ELMDE
-
-engine = ELMDE.load()
-
-triage = engine.triage(
-    prompt="Patient age 68 presenting with sudden left-sided facial droop and slurred speech.",
-    tiers=["LEVEL_5_NON_URGENT", "LEVEL_4_STANDARD", "LEVEL_3_URGENT", "LEVEL_2_EMERGENT", "LEVEL_1_RESUSCITATION"]
-)
-
-print(f"Assigned Tier: {triage.tier} (Rank: {triage.predicted_rank})")
-print(f"Cumulative Survival P(Y > k): {triage.cumulative_survival}")
-print(f"Conformal Gate Status: {triage.status}")  # 'ACCEPTED' or 'ABSTAIN_ESCALATE'
-
-if not triage.is_safe:
-    print("⚠ Conformal risk gate triggered! Escalate to emergency physician.")
-```
-
-### Recipe 4: Inline LLM Call Guardrail Decorator
-Decorates any existing function, agent step, or LLM invocation:
-```python
-from elmde import ELMDE
-
-engine = ELMDE.load()
-
-@engine.guardrail(
-    fallback_handler=lambda prompt, res: f"[ESCALATED TO HUMAN] Confidence ({res.confidence:.4f}) below safety floor."
-)
-def execute_autonomous_trade(order_details: str):
-    return f"[EXECUTED] Trade placed: {order_details}"
-
-# Automatically escalates high-risk inputs before execution
-response = execute_autonomous_trade("Execute maximum leverage short on illiquid token.")
-print(response)
-```
+1. **Gate calibration scan stops too early** (`elmde/conformal/scrc.py`). `calibrate()` walks thresholds from 1.0 downward and stops at the first one whose bound fails. At `alpha = 0.01`, any threshold that accepts fewer than 99 calibration points fails, because `B/(m+1) > 0.01` for those, so the scan usually stops immediately and falls back to the maximum confidence, accepting almost nothing. On 25,000 simulated points, the NumPy reference in `elmde_model.py` (which skips thresholds with too few accepted points) finds tau* = 0.985 with 8.1% coverage, while the package version falls back to 0.9999. `predict_selective()` also reports `guaranteed_max_error = alpha` even after a fallback.
+2. **"IFT" gradients in the package model are a rescaled full backprop** (`elmde/nn/equilibrium_core.py`). The loop runs with autograd enabled, and `IFTPhantomGradFunction` multiplies the incoming gradient by `1/alpha`. Measured: the `use_ift=True` gradient equals 2.2222 (`1/0.45`) times the plain backprop-through-time gradient. Activation memory therefore grows with the number of steps. The Neumann-series version in `train_and_benchmark_elmde.py` does run the iterations without a graph.
+3. **No contraction guarantee.** The `tanh` bound limits the size of `Psi`, not its Lipschitz constant. In every run observed for this revision, the core did not reach the 1e-3 halting tolerance within its step cap. `tests/test_adversarial_stability.py` passes because its threshold is `residual < 0.25`. Its "spectral radius" (about 0.61) is a finite-difference estimate for `Psi` alone, not for the damped map, evaluated at the pooled decision vector rather than at a fixed point.
+4. **Padding is attended to.** `ELMDETrainer` passes padded `input_ids` without a mask. In `ELMDEFoundationModel`, the backbone receives the attention mask, but the core's cross-attention and mean pooling include padded positions.
+5. **Silent tokenizer degradation.** If the tokenizer cannot be loaded properly, nothing fails: the API falls back to character codes (`ord(c) % vocab_size`), and transformers 5.x may return a near-empty vocabulary.
+6. **Data.** `data/` is synthetic and template-based, and every validation template also occurs in training. The generator seeds its RNG only before shuffling, so regenerating gives different samples. In `train_foundation_model.py`, the choice-candidate embeddings are created after the optimizer and are never updated.
+7. **Docker.** The `Dockerfile` copies `pyproject.toml`, which does not exist in the repository, so the image build should fail at that step (static check; not run).
+8. **Two diverging implementations** (`elmde/` and `train_and_benchmark_elmde.py`) with different MoE, option-scoring, and gradient schemes.
 
 ---
 
-## 📁 Repository Directory Structure
+## Repository map
 
 ```
-.
-├── assets/                              # High-Fidelity Vector Graphics & Motion Graphics
-│   ├── hero_banner.svg                  # Vector hero banner with glowing equilibrium orbits
-│   ├── architecture_motion.svg          # Animated end-to-end dataflow diagram
-│   ├── convergence_motion.svg           # Banach fixed-point convergence vs CDM drift
-│   ├── mla_matrix_absorption.svg        # Commutative Matrix Absorption derivation diagram
-│   └── benchmark_comparison.svg         # Head-to-head empirical benchmark chart
-│
-├── elmde/                               # Core Production Engine Package
-│   ├── __init__.py                      # 1-line importable API: from elmde import ELMDE
-│   ├── injector.py                      # Universal plug-and-play decision injector & decorators
-│   ├── config.py                        # Tensor-Core-aligned ELMDEConfig
-│   ├── client.py                        # Python client SDK
-│   ├── nn/                              # Hardware Compute Kernels & Neural Modules
-│   │   ├── mla.py                       # Multi-Head Latent Attention (Absorb Mode)
-│   │   ├── sparse_moe.py                # Top-K Routed Sparse MoE with Aux Loss
-│   │   ├── equilibrium_core.py          # Damped Contractive Core with IFT Autograd
-│   │   ├── heads.py                     # Tri-Modal Manifold Heads (Choice, CORN, Beta)
-│   │   ├── model.py                     # Native ELMDEModel (12.7M parameters)
-│   │   ├── foundation_model.py          # ModernBERT Hybrid Foundation Backbone (149M params)
-│   │   ├── rms_norm.py                  # Pre-RMSNorm kernel
-│   │   ├── swiglu.py                    # Hardware-tiled SwiGLU FFN
-│   │   └── rope.py                      # Decoupled RoPE Rotary Embeddings
-│   ├── conformal/                       # Conformal Risk Control
-│   │   ├── scrc.py                      # Two-Stage Selective Conformal Risk Control
-│   │   └── adaptive_scrc.py             # Online Adaptive Conformal Inference (ACI)
-│   ├── data/                            # Tokenizer & Jagged Pipeline
-│   │   ├── tokenizer.py                 # Fast BPE / ModernBERT Tokenizer wrapper
-│   │   ├── dataset.py                   # JaggedDataCollator with cu_seqlens packing
-│   │   └── generate_rich_corpus.py      # Multi-domain 2,500-sample dataset generator
-│   └── utils/                           # Utilities
-│       └── device.py                    # Accelerator auto-detection (CUDA/MPS/CPU)
-│
-├── checkpoints/                         # Calibrated Model Weights
-│   ├── elmde_production.pt              # 50.8 MB production neural weights
-│   └── scrc_calibration.json            # Calibrated conformal threshold (tau* = 0.9848)
-│
-├── data/                                # Dataset Assets
-│   ├── production_corpus_train.json     # 2,000 multi-domain training instances
-│   └── production_corpus_val.json       # 500 calibration instances
-│
-├── tests/                               # Rigorous Mathematical & Adversarial Test Suites
-│   └── test_adversarial_stability.py    # Spectral radius & Banach contractivity suite
-│
-├── elmde_engine.py                      # Pure NumPy + PyTorch mathematical verification suite
-├── elmde_model.py                       # Self-contained architectural implementation
-├── example_injection.py                 # 4 runnable production injection patterns
-├── benchmark_efficiency.py              # Performance & latency audit script
-├── benchmark_comparative_cdm.py         # Head-to-head empirical comparison vs. CDMs
-├── train_and_benchmark_elmde.py         # SVD grafting, 77-option RLCR, & Jev/Laya benchmark
-├── train_production_weights.py          # Training pipeline for production checkpoint
-├── train_foundation_model.py            # ModernBERT foundation fine-tuning pipeline
-├── verify_production.py                 # 8-part unit and integration verification suite
-└── research_report.md                   # 95KB Deep Research report & mathematical derivations
+elmde/                         Python package
+  config.py                    ELMDEConfig (model, core, head and gate hyper-parameters)
+  injector.py                  ELMDE high-level API (decide / triage / estimate / route_tool / guardrail)
+  client.py                    httpx client for the HTTP API
+  nn/                          model.py (ELMDEModel), foundation_model.py (ELMDEFoundationModel),
+                               mla.py, rope.py, sparse_moe.py, swiglu.py, rms_norm.py,
+                               equilibrium_core.py, heads.py
+  conformal/                   scrc.py (threshold calibration + gate), adaptive_scrc.py (online update, not wired in)
+  training/                    trainer.py (ELMDETrainer), losses.py, rlcr.py (GRPO-style advantages)
+  data/                        tokenizer.py, dataset.py (DecisionDataset, JaggedDataCollator),
+                               generate_rich_corpus.py (synthetic data generator)
+  serving/                     api.py (FastAPI app), schemas.py
+  utils/device.py              device / dtype selection
+elmde_model.py                 NumPy reference implementation + run_comprehensive_verification()
+elmde_engine.py                runs the NumPy self-check
+train_and_benchmark_elmde.py   standalone variant (SVD init, latent MoE, Neumann-series gradients, scoring-rule loss)
+train_production_weights.py    trains the small ELMDEModel on 20 hand-written sentences; writes checkpoints/
+train_foundation_model.py      fine-tunes ELMDEFoundationModel (ModernBERT-base) on data/; writes checkpoints/
+verify_production.py           8 component and API checks (pytest-collectable)
+tests/                         test_adversarial_stability.py
+demo_inference.py              prints head outputs for random token ids
+example_injection.py           high-level API examples (needs Hub tokenizer)
+benchmark_efficiency.py        component timings and sanity output for the checkpoint
+benchmark_comparative_cdm.py   simulated comparison; not a valid baseline (see Benchmarks)
+checkpoints/                   elmde_production.pt (12.7 M params, smoke-test weights),
+                               scrc_calibration.json (fallback threshold from synthetic test data)
+data/                          production_corpus_{train,val}.json (2,000 / 500 synthetic records)
+research_report.md             AI-assisted literature review and design notes (see below)
+gemini_conversation.md,        export of the research-assistant (Gemini) session behind research_report.md,
+full_gemini_payload.json         including its source links
+*.html, assets/*.svg           visualisations; they repeat figures from earlier README versions that
+                               are not backed by experiments in this repo
+Dockerfile, docker-compose.yml container setup (see Known issues)
+requirements.txt, LICENSE
 ```
+
+`research_report.md` is a literature-style design document. Its `[cite: N]` markers are not resolved to a reference list inside the file, and the numerical results it reports come from external papers or from simulated data, not from this code.
 
 ---
 
-## 📜 Citation & Author
+## Roadmap
 
-Created and maintained by **Kanav Jeet Singh**.
+1. Fix the gate calibration scan (skip thresholds with too few accepted points) and report the risk-coverage curve, not just one threshold.
+2. Replace the gradient rescaling in `elmde/nn/equilibrium_core.py` with the Neumann-series implicit gradient from the standalone script, and measure memory against the number of steps.
+3. Add padding masks (or packed `cu_seqlens` execution) to the encoder, core, and pooling.
+4. Train and evaluate on Banking77 with a held-out calibration split: accuracy, ECE, and selective risk vs. coverage. Compare against a fine-tuned encoder classifier (e.g. ModernBERT with a linear head) and against an LLM with constrained decoding.
+5. Run a latency benchmark against a real autoregressive model with constrained decoding on the same hardware and option sets.
+6. Study convergence of the trained core (residual vs. steps, Jacobian norm estimates for the damped map at the fixed point), and make the tests fail when the halting tolerance is not reached.
+7. Merge the two implementations, fix the Dockerfile, and add CI.
+
+---
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
+
+## Citation
+
+Author: **Kanav Jeet Singh**.
 
 ```bibtex
 @software{singh2026elmde,
   author = {Singh, Kanav Jeet},
-  title = {Equilibrium Latent-MoE Decision Engine (ELMDE): Overcoming Autoregressive Constrained Decoding Distortion},
-  year = {2026},
-  url = {https://github.com/KanavjeetS/Equilibrium-Latent-MoE-Decision-Engine-ELMDE-}
+  title  = {{ELMDE}: Equilibrium Latent-MoE Decision Engine (research prototype)},
+  year   = {2026},
+  url    = {https://github.com/KanavjeetS/Equilibrium-Latent-MoE-Decision-Engine-ELMDE-}
 }
 ```
-
----
-
-## ⚖️ License
-
-Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
